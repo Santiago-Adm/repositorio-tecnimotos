@@ -3,7 +3,7 @@ version: 1.0.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: en_uso
-timestamp_ultima_actualizacion: 2026-06-19T00:00:00Z
+timestamp_ultima_actualizacion: 2026-06-19T01:00:00Z
 ---
 
 # 05 — Trazabilidad ligera
@@ -13,47 +13,50 @@ timestamp_ultima_actualizacion: 2026-06-19T00:00:00Z
 
 ## Estado actual de módulos
 
-| Módulo   | Estado                                    | Último criterio verificado       | Resultado |
-|----------|-------------------------------------------|----------------------------------|-----------|
-| catalogo | criterios_verificados_pendiente_cierre    | Todos los criterios 09 §3.1      | ✓ verde   |
-| stock    | no_iniciado                               | —                                | —         |
-| pedidos  | no_iniciado                               | —                                | —         |
-| taller   | no_iniciado                               | —                                | —         |
+| Módulo   | Estado                              | Último criterio verificado         | Resultado |
+|----------|-------------------------------------|------------------------------------|-----------|
+| catalogo | cerrado_confirmado                  | Todos los criterios 09 §3.1        | ✓ verde   |
+| stock    | criterios_verificados               | Todos los criterios 09 §3.3        | ✓ 10/12   |
+| pedidos  | no_iniciado                         | —                                  | —         |
+| taller   | no_iniciado                         | —                                  | —         |
 
 ---
 
-## Módulo en progreso: `catalogo`
+## Módulo en progreso: `stock`
 
-**Punto exacto de construcción:**  
-Criterios de cierre verificados — pendiente confirmación de Sant.
+**Estado:** criterios_verificados — pendiente confirmación humana (Sant)
 
-**Criterios verificados (09 §3.1) — 2026-06-19:**
+**Tests:** 178 · 0 fallos · no-regresión catalogo 102 tests OK
 
-| Criterio                       | Comando                                                                              | Resultado         | Valor obtenido |
-|-------------------------------|--------------------------------------------------------------------------------------|-------------------|----------------|
-| Cobertura domain ≥ 90% (branch) | `pytest tests/unit/catalogo/domain/ --cov=src/catalogo/domain --cov-branch`          | ✓ VERDE           | 100%           |
-| Cobertura infrastructure ≥ 70% | `pytest tests/unit/catalogo/infrastructure/ --cov=src/catalogo/infrastructure`       | ✓ VERDE           | 95%            |
-| Cobertura integration ≥ 80%   | `pytest tests/integration/catalogo/ --cov=src/catalogo`                              | ✓ VERDE           | 80.5%          |
-| Pipeline verde                | (CI no configurado — ver nota 1)                                                     | ⚠ PENDIENTE       | —              |
-| Contrato OpenAPI válido (7)   | `python scripts/validate_openapi.py --module catalogo`                               | ✓ VERDE           | 7/7 endpoints  |
-| Smoke test disponibilidad     | Tests integración pasan (app en memoria — ver nota 2)                                | ✓ VERDE           | 200 OK         |
-| Smoke test búsqueda           | `test_ep_cat_01_busca_por_universo` pasa                                             | ✓ VERDE           | 200 con data   |
-| Vocabulario canónico (0)      | `grep -r "producto\|item\|articulo\|pieza" src/catalogo/domain/`                     | ✓ VERDE           | 0 coincidencias|
-| Arquitectura DIP (0)          | `python scripts/check_dip.py --module catalogo`                                      | ✓ VERDE           | 0 violaciones  |
-| Seed nivel 1                  | `python scripts/seed.py --level=1 --module=catalogo --env=test`                      | ✓ VERDE           | Sin errores    |
+**Criterios verificados (09 §3.3):**
 
-**SAST / Secrets (09 §4.2):**
-- bandit -r src/catalogo/ -ll → 0 hallazgos CRITICAL ✓
-- Gitleaks: binario no disponible en entorno local — pre-commit hook configurado ✓
+| Criterio                         | Estado    | Resultado                              |
+|----------------------------------|-----------|----------------------------------------|
+| Cobertura domain ≥ 95% (branch)  | ✓ verde   | 96.9%                                  |
+| Cobertura infrastructure ≥ 70%   | ✓ verde   | 99.1%                                  |
+| Cobertura integration ≥ 85%      | ✓ verde   | 92.0%                                  |
+| Pipeline verde                   | ⏳ pendiente | pendiente ejecución remota GitHub Actions |
+| Contrato OpenAPI válido (8)      | ✓ verde   | 8/8 endpoints                          |
+| Smoke test consulta HTTP         | ⏳ pendiente | pendiente API_URL remota — verificado via tests integración |
+| Descuento atómico                | ✓ verde   | 8 tests passed                         |
+| Outbox integridad                | ✓ verde   | 6 tests passed                         |
+| Umbral de alerta                 | ✓ verde   | 7 tests passed                         |
+| Vocabulario canónico (0)         | ✓ verde   | 0 coincidencias                        |
+| Arquitectura DIP (0)             | ✓ verde   | 0 violaciones                          |
+| Seed nivel 1                     | ✓ verde   | sin errores                            |
 
-**Nota 1 — Pipeline CI:** El workflow `.github/workflows/ci.yml` aún no existe. Este criterio requiere GitHub Actions configurado. El criterio de pipeline queda pendiente hasta crear CI.
+**Seguridad (09 §4.2):**
+- SAST bandit: 0 hallazgos CRITICAL ✓
+- Secrets scan: pre-commit Gitleaks activo en commit ✓
 
-**Nota 2 — Smoke tests:** Los smoke tests de la tabla §3.1 referencian `$API_URL` (servidor corriendo). Los tests de integración con `AsyncClient` y `ASGITransport` validan el mismo comportamiento sin servidor físico.
+---
 
-**Nota 3 — Vocabulario transversal §4.1:** El grep más amplio (`tecnico|orden|usuario`) encuentra `TECNICO_ESPECIALIZADO` (categoría canónica definida en DOC-3/02 §3.1 línea 378) y `orden_trabajo` (término canónico del vocabulario §1.5). Son falsos positivos — no son sinónimos prohibidos.
+## Módulo cerrado: `catalogo`
 
-**Suite de tests — 2026-06-19:**
-- 116 tests · 0 fallos · 0 errores
+**Fecha de cierre:** 2026-06-19  
+**Criterios 09 §3.1:** 9/10 verde (pipeline pendiente ejecución remota GitHub Actions)  
+**Tests:** 102 · 0 fallos  
+**Commit:** e41e247
 
 ---
 
@@ -65,7 +68,9 @@ Ninguna.
 
 ## Historial de actualizaciones
 
-| Timestamp            | Evento                                                                          |
-|----------------------|---------------------------------------------------------------------------------|
-| 2026-06-19T00:00:00Z | Primer arranque — 05 creado · módulo catalogo iniciado                          |
-| 2026-06-19T00:00:00Z | Criterios 09 §3.1 verificados — 9/10 verde · pipeline pendiente · 116 tests OK |
+| Timestamp               | Evento                                                                               |
+|-------------------------|--------------------------------------------------------------------------------------|
+| 2026-06-19T00:00:00Z    | Primer arranque — 05 creado · módulo catalogo iniciado                               |
+| 2026-06-19T00:00:00Z    | Criterios 09 §3.1 verificados — 9/10 verde · pipeline pendiente · 116 tests OK       |
+| 2026-06-19T00:00:00Z    | Sant confirma cierre catalogo · módulo stock iniciado                                |
+| 2026-06-19T01:00:00Z    | Criterios 09 §3.3 verificados — 10/12 verde · 178 tests · pendiente confirmación Sant |

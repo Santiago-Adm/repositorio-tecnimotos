@@ -19,6 +19,16 @@ ENDPOINTS_POR_MODULO: dict[str, list[str]] = {
         "DELETE /v1/repuestos/{codigo}",
         "GET /v1/repuestos/{codigo}/historial-precio",
     ],
+    "stock": [
+        "GET /v1/stock/{codigo}",
+        "GET /v1/stock",
+        "GET /v1/stock/{codigo}/movimientos",
+        "POST /v1/stock/{codigo}/ajuste",
+        "PATCH /v1/stock/{codigo}/umbral",
+        "POST /v1/reabastecimientos",
+        "PATCH /v1/reabastecimientos/{reab_id}/estado",
+        "GET /v1/reabastecimientos/{reab_id}",
+    ],
 }
 
 CONTEO_ESPERADO: dict[str, int] = {
