@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src/ api/ tests/
+
+      - name: SAST (bandit)
+        run: bandit -r src/ -ll
+
+      - name: Unit tests — domain (branch coverage ≥ 90%)
+        run: |
+          pytest tests/unit/catalogo/domain/ \
+            --cov=src/catalogo/domain \
+            --cov-branch \
+            --cov-fail-under=90 \
+            -q
+
+      - name: Unit tests — infrastructure (line coverage ≥ 70%)
+        run: |
+          pytest tests/unit/catalogo/infrastructure/ \
+            --cov=src/catalogo/infrastructure \
+            --cov-fail-under=70 \
+            -q
+
+      - name: Contract tests — LSP suites
+        run: pytest tests/contracts/ -q
+
+      - name: Integration tests (line coverage ≥ 80%)
+        run: |
+          pytest tests/integration/catalogo/ \
+            --cov=src/catalogo \
+            --cov-fail-under=80 \
+            -q
+
+      - name: DIP check
+        run: python scripts/check_dip.py --module catalogo
+
+      - name: OpenAPI contract validation
+        run: python scripts/validate_openapi.py --module catalogo
+
+      - name: Seed nivel 1
+        run: python scripts/seed.py --level=1 --module=catalogo --env=test
+
+      - name: Vocabulary check (catalogo)
+        run: |
+          if grep -r "producto\|item\|articulo\|pieza" src/catalogo/domain/; then
+            echo "ERROR: vocabulario prohibido detectado en domain/"
+            exit 1
+          fi
+          echo "OK: vocabulario canónico limpio"
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks secrets scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

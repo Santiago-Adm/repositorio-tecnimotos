@@ -30,3 +30,7 @@ coverage.xml
 # Backups locales
 *.dump
 *.sql.gz
+*.egg-info/
+dist/
+.pytest_cache/
+.coverage
