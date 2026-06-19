@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentación de formato de variables de entorno — no son secretos reales"
+paths = [
+  '''\.doc3/07-criterios-seguridad-ejecutables\.md'''
+]
+regexes = [
+  '''-----BEGIN (RSA )?PRIVATE KEY-----''',
+]
