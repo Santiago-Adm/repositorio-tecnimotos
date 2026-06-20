@@ -13,11 +13,19 @@ from fastapi.responses import JSONResponse
 from api.dependencies import error_response, success_response
 from api.routes import catalogo as catalogo_router
 from api.routes import stock as stock_router
+from api.routes import pedidos as pedidos_router
 from src.catalogo.infrastructure.repositories.repuesto_repository_inmemory import (
     InMemoryRepuestoRepository,
 )
 from src.stock.infrastructure.repositories.stock_repository_inmemory import (
     InMemoryStockRepository,
+)
+from src.pedidos.infrastructure.repositories.pedido_repository_inmemory import (
+    InMemoryPedidoRepository,
+)
+from src.pedidos.infrastructure.adapters.catalogo_adapter import (
+    InMemoryCatalogoAdapter,
+    InMemoryStockAdapter,
 )
 from src.shared.events.event_bus import InMemoryEventBus
 from src.shared.infrastructure.logging import configure_logging, request_id_var
@@ -55,11 +63,15 @@ def create_app() -> FastAPI:
     # Estado de la aplicación — repositorios y bus de eventos
     app.state.catalogo_repo = InMemoryRepuestoRepository()
     app.state.stock_repo = InMemoryStockRepository()
+    app.state.pedidos_repo = InMemoryPedidoRepository()
+    app.state.catalogo_adapter = InMemoryCatalogoAdapter()
+    app.state.stock_adapter = InMemoryStockAdapter()
     app.state.event_bus = InMemoryEventBus()
 
     # Routers
     app.include_router(catalogo_router.router)
     app.include_router(stock_router.router)
+    app.include_router(pedidos_router.router)
 
     @app.get("/v1/health", tags=["health"])
     async def health(request: Request):
