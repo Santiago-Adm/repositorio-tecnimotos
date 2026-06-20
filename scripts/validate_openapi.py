@@ -29,6 +29,25 @@ ENDPOINTS_POR_MODULO: dict[str, list[str]] = {
         "PATCH /v1/reabastecimientos/{reab_id}/estado",
         "GET /v1/reabastecimientos/{reab_id}",
     ],
+    "pedidos": [
+        "POST /v1/pedidos",
+        "GET /v1/pedidos",
+        "GET /v1/pedidos/{pedido_id}",
+        "POST /v1/pedidos/{pedido_id}/confirmar",
+        "POST /v1/pedidos/{pedido_id}/cancelar",
+        "POST /v1/reservas",
+        "POST /v1/reservas/{reserva_id}/liberar",
+        "POST /v1/pedidos/{pedido_id}/proforma",
+        "POST /v1/pedidos/{pedido_id}/envio",
+        "POST /v1/pedidos/{pedido_id}/confirmar-recepcion",
+        "POST /v1/pedidos/{pedido_id}/incidencia",
+        "POST /v1/notificaciones/repuesto-disponible",
+        "POST /v1/lista-reserva-progresiva",
+        "POST /v1/lista-reserva-progresiva/{lista_id}/formalizar",
+        "POST /v1/pedidos/{pedido_id}/comprobante",
+        "POST /v1/comprobantes/{comprobante_id}/aprobar",
+        "POST /v1/comprobantes/{comprobante_id}/anular",
+    ],
 }
 
 CONTEO_ESPERADO: dict[str, int] = {
