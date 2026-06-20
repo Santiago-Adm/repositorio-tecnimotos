@@ -14,6 +14,7 @@ from api.dependencies import error_response, success_response
 from api.routes import catalogo as catalogo_router
 from api.routes import stock as stock_router
 from api.routes import pedidos as pedidos_router
+from api.routes import taller as taller_router
 from src.catalogo.infrastructure.repositories.repuesto_repository_inmemory import (
     InMemoryRepuestoRepository,
 )
@@ -26,6 +27,12 @@ from src.pedidos.infrastructure.repositories.pedido_repository_inmemory import (
 from src.pedidos.infrastructure.adapters.catalogo_adapter import (
     InMemoryCatalogoAdapter,
     InMemoryStockAdapter,
+)
+from src.taller.infrastructure.repositories.taller_repository_inmemory import (
+    InMemoryTallerRepository,
+)
+from src.taller.infrastructure.adapters.catalogo_taller_adapter import (
+    InMemoryCatalogoTallerAdapter,
 )
 from src.shared.events.event_bus import InMemoryEventBus
 from src.shared.infrastructure.logging import configure_logging, request_id_var
@@ -66,12 +73,15 @@ def create_app() -> FastAPI:
     app.state.pedidos_repo = InMemoryPedidoRepository()
     app.state.catalogo_adapter = InMemoryCatalogoAdapter()
     app.state.stock_adapter = InMemoryStockAdapter()
+    app.state.taller_repo = InMemoryTallerRepository()
+    app.state.catalogo_taller_adapter = InMemoryCatalogoTallerAdapter()
     app.state.event_bus = InMemoryEventBus()
 
     # Routers
     app.include_router(catalogo_router.router)
     app.include_router(stock_router.router)
     app.include_router(pedidos_router.router)
+    app.include_router(taller_router.router)
 
     @app.get("/v1/health", tags=["health"])
     async def health(request: Request):
