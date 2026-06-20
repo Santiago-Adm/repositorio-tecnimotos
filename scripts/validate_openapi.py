@@ -48,6 +48,20 @@ ENDPOINTS_POR_MODULO: dict[str, list[str]] = {
         "POST /v1/comprobantes/{comprobante_id}/aprobar",
         "POST /v1/comprobantes/{comprobante_id}/anular",
     ],
+    "taller": [
+        "POST /v1/ordenes-trabajo",
+        "POST /v1/ordenes-trabajo/{ot_id}/repuestos",
+        "POST /v1/ordenes-trabajo/{ot_id}/aprobar-lista",
+        "POST /v1/ordenes-trabajo/{ot_id}/confirmar-adicional",
+        "POST /v1/ordenes-trabajo/{ot_id}/autorizar-precio",
+        "POST /v1/ordenes-trabajo/{ot_id}/revision-final",
+        "POST /v1/ordenes-trabajo/{ot_id}/cobro-parcial",
+        "POST /v1/ordenes-trabajo/{ot_id}/cerrar",
+        "POST /v1/ordenes-trabajo/{ot_id}/cancelar",
+        "POST /v1/ordenes-trabajo/{ot_id}/liberar-vehiculo",
+        "GET /v1/taller/disponibilidad",
+        "GET /v1/ordenes-trabajo/{ot_id}",
+    ],
 }
 
 CONTEO_ESPERADO: dict[str, int] = {
@@ -56,6 +70,21 @@ CONTEO_ESPERADO: dict[str, int] = {
     "stock": 8,
     "taller": 12,
 }
+
+ENDPOINTS_TALLER = [
+    "POST /v1/ordenes-trabajo",
+    "POST /v1/ordenes-trabajo/{ot_id}/repuestos",
+    "POST /v1/ordenes-trabajo/{ot_id}/aprobar-lista",
+    "POST /v1/ordenes-trabajo/{ot_id}/confirmar-adicional",
+    "POST /v1/ordenes-trabajo/{ot_id}/autorizar-precio",
+    "POST /v1/ordenes-trabajo/{ot_id}/revision-final",
+    "POST /v1/ordenes-trabajo/{ot_id}/cobro-parcial",
+    "POST /v1/ordenes-trabajo/{ot_id}/cerrar",
+    "POST /v1/ordenes-trabajo/{ot_id}/cancelar",
+    "POST /v1/ordenes-trabajo/{ot_id}/liberar-vehiculo",
+    "GET /v1/taller/disponibilidad",
+    "GET /v1/ordenes-trabajo/{ot_id}",
+]
 
 
 def validate_module(module: str) -> bool:
