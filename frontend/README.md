@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SANTI — Frontend (Tecnimotos Santi)
 
-## Getting Started
+Este es el frontend del Sistema de Asistencia y Núcleo Técnico Integral (SANTI) para Tecnimotos Santi, desarrollado utilizando **Next.js 14 (App Router)**, **TypeScript**, y **Tailwind CSS**.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 📋 Arquitectura de Presentación
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+El sistema está dividido en dos superficies visuales vinculantes declaradas en el diseño del sistema (`03-diseno-sistema.md` §3.3.1):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Interfaz Pública (Light Theme):**
+   - **Estilo:** Fondo claro (`--color-surface-light` / `#F8FAFC`), texto oscuro (`slate-800`), acentos en `--color-teal` (`#0D9488`).
+   - **Destinatarios:** Clientes conductores (`CLIENTE_CONDUCTOR` / S1), mecánicos de distrito (`CLIENTE_DISTRITO` / S2) y clientes rurales (`CLIENTE_RURAL` / S4).
+   - **Grupo de Rutas:** `app/(public)/*`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Interfaz Interna (Dark Theme / "Modo Taller"):**
+   - **Estilo:** Fondo oscuro (`--color-surface-dark` / `#0F172A`), texto claro (`slate-50`), acentos en `--color-teal` y `--color-electric` (`#8B5CF6`).
+   - **Destinatarios:** Operarios internos (`SUPERADMIN`, `ADMINISTRADOR`, `MECANICO_MASTER`, `MECANICO_JUNIOR`).
+   - **Grupo de Rutas:** `app/(internal)/*`
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## ⚖️ Decisión de Diseño: Contexto Visual del VENDEDOR
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+El rol de `VENDEDOR` es transversal y opera en ambas superficies:
+- Consulta el catálogo de repuestos públicamente para asesorar a clientes de manera presencial.
+- Gestiona y emite comprobantes en estado `PENDIENTE_VALIDACION` en la consola interna.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Definición de Cambio de Contexto
+Para evitar la complejidad de estados manuales, alternancia de clases en runtime y posibles desfases visuales, **el contexto visual del VENDEDOR depende estrictamente de la ruta navegada**:
+- Al acceder al catálogo público (`/catalogo`), el sistema renderiza el layout del grupo `(public)`, aplicando el tema claro (interfaz pública).
+- Al acceder al panel de facturación y comprobantes (`/facturacion`), el sistema renderiza el layout de `(internal)`, aplicando el tema oscuro (Modo Taller).
 
-## Deploy on Vercel
+Esto mantiene el desacoplamiento de layouts a nivel de Next.js Route Groups y asegura que el lóbulo visual concuerde con el rol de uso del software en ese preciso instante.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Tecnologías y Estructura
+
+- **Next.js 14.2.x** (App Router)
+- **Tailwind CSS 3.4.x**
+- **TypeScript 5.4.x**
+- **Fuentes (Google Fonts):**
+  - Display: `Quicksand` (Títulos, logotipo, proformas)
+  - Body: `Nunito Sans` (Párrafos, botones, alertas)
+  - Mono: `Fira Code` (Códigos de repuestos, precios, placas)
