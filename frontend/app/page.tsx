@@ -132,7 +132,7 @@ export default function Home() {
                   Consola Operativa SANTI
                 </h3>
                 <p className="text-slate-400 text-sm">
-                  Espacio de trabajo interno en "Modo Taller" para mecánicos, administradores y vendedores. Diseñado para reducir fatiga visual.
+                  Espacio de trabajo interno en &quot;Modo Taller&quot; para mecánicos, administradores y vendedores. Diseñado para reducir fatiga visual.
                 </p>
               </div>
 
