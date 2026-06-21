@@ -101,6 +101,10 @@ class ActualizarEstadoRequest(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.stock.infrastructure.repositories.stock_repository_pg import StockRepositoryPG
+        return StockRepositoryPG(db)
     return request.app.state.stock_repo
 
 

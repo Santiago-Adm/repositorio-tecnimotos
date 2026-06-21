@@ -1,16 +1,19 @@
 """
 Punto de entrada FastAPI — api-server (03 §4.1).
 CorrelationMiddleware establece request_id antes de call_next (02 §1.6).
+DatabaseSessionMiddleware: crea AsyncSession por request → repos PG activos cuando la BD existe.
 """
 from __future__ import annotations
 
 import uuid
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from api.dependencies import error_response, success_response
+from api.middleware.database_session import DatabaseSessionMiddleware
 from api.middleware.metrics_collector import MetricsCollectorMiddleware
 from api.middleware.rate_limiter import RateLimiterMiddleware
 from api.routes import admin as admin_router
@@ -56,17 +59,46 @@ configure_logging(
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Intenta conectar a PostgreSQL al arranque; si falla, usa InMemory."""
+    from sqlalchemy import text
+    from src.shared.infrastructure.database import create_engine, create_session_factory
+
+    try:
+        engine = create_engine()
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        app.state.db_session_factory = create_session_factory(engine)
+        app.state._pg_engine = engine
+        logger.info("PostgreSQL conectado — repos PG activos")
+    except Exception as exc:
+        app.state.db_session_factory = None
+        app.state._pg_engine = None
+        logger.info("PostgreSQL no disponible (%s) — repos InMemory", exc)
+
+    yield
+
+    engine = getattr(app.state, "_pg_engine", None)
+    if engine is not None:
+        await engine.dispose()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Tecnimotos API",
         version=settings.api_version,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=_lifespan,
     )
 
-    # Middleware order: outer → inner. MetricsCollector registra DESPUÉS de rate limit.
+    # Middleware order: outer → inner.
+    # DatabaseSession crea la sesión PG por request (si BD disponible).
+    # MetricsCollector registra DESPUÉS de rate limit.
     app.add_middleware(MetricsCollectorMiddleware)
     app.add_middleware(RateLimiterMiddleware)
+    app.add_middleware(DatabaseSessionMiddleware)
 
     # CorrelationMiddleware — establece request_id ANTES de call_next (02 §1.6)
     @app.middleware("http")
