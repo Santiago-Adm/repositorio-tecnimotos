@@ -1,9 +1,9 @@
 ---
-version: 1.2.0
+version: 1.3.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: listo_para_predeploy
-timestamp_ultima_actualizacion: 2026-06-20T15:00:00Z
+timestamp_ultima_actualizacion: 2026-06-21T01:30:00Z
 ---
 
 # 05 — Trazabilidad ligera
@@ -33,9 +33,9 @@ de esta construcción.
 | pedidos  | cerrado_confirmado  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 |
 | taller   | cerrado_confirmado  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 |
 
-Todos los módulos: `cerrado_confirmado`. Suite completa actual: **780 tests** (verificado con `python -m pytest tests/ --co -q`, 2026-06-20T15:00).
+Todos los módulos: `cerrado_confirmado`. Suite completa actual: **820 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T01:30, entorno `.venv` aislado del proyecto).
 
-Nota: los conteos por módulo de la tabla (102+178+184+148 = 612) son históricos — reflejan qué tenía cada módulo al cerrarse. Los 780 incluyen tests añadidos después: 5 suites LSP (`42100f4`), scripts CT-11-01/CT-11-02 (`44c4127`), auth middleware + cobertura api/ + shared/ (esta sesión).
+Nota: los conteos por módulo de la tabla (102+178+184+148 = 612) son históricos. Los 820 incluyen: 5 suites LSP (`42100f4`), scripts CT-11-01/CT-11-02 (`44c4127`), auth middleware + cobertura api/ + shared/ (`03a0c4f`), tests auth_stores y error_handlers (`6944b4f`).
 
 Los criterios pendientes en todos los módulos (pipeline CI/CD remoto · smoke tests HTTP · E2E staging)
 son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de código.
@@ -49,11 +49,11 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 | Ítem                                              | Resultado                                          |
 |---------------------------------------------------|----------------------------------------------------|
 | 4 módulos — todos los criterios de módulo         | ✓ cerrado_confirmado por Sant                      |
-| Suite completa sin regresiones (09 §6)            | ✓ 780 tests — `python -m pytest tests/ --co -q` 2026-06-20T15:00 |
-| check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · api 91.7% · infra 98.8% |
+| Suite completa sin regresiones (09 §6)            | ✓ **820 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T01:30 (entorno aislado) |
+| check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 87.5%** · infra 98.9% (verificado en entorno aislado) |
 | Pipeline CI/CD verde en main                      | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
 | OpenAPI 4 módulos válidos                         | ✓ 7 · 17 · 8 · 12 endpoints (44 negocio)          |
-| 54/54 endpoints 03 §6 implementados              | ✓ +10 nuevos: EP-AUTH-01/02/03/04 · EP-AUTH-05(main.py) · EP-ADM-01/02/03/04/05 |
+| **55/55** endpoints 03 §6 implementados           | ✓ 44 negocio + EP-AUTH-01/02/03/04/05 + EP-ADM-01/02/03/04/05 + EP-CAT-07 (PCT-003) |
 | 0 hallazgos CRITICAL imagen Docker (trivy)        | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
 
 ### §9.2 Bloque seguridad — verde
@@ -110,4 +110,5 @@ Ninguna.
 | 2026-06-20T04:00:00Z    | PCT-05-001 — corrección de conteo de tests: "464" y "612" reemplazados por 735 (verificado con comando crudo `python -m pytest tests/ --co -q`). Discrepancia detectada por Sant al revisar el documento, no de forma proactiva. Origen del error: 464 = suma parcial catalogo+stock+pedidos reutilizada como total; 612 = suma aritmética de conteos históricos por módulo. Ninguno de los dos fue verificado con comando crudo antes de escribirse. |
 | 2026-06-20T15:00:00Z    | Ronda de cierre: auth JWT RS256 + RBAC implementado (api/auth.py · 32 endpoints protegidos · 10 tests auth) · cobertura api/ 91.7% ✓ · cobertura shared/ 92.9% ✓ · check_coverage.py exit 0 · 780 tests · §9.1-§9.4 re-verificados completos · declaración 09 §9.5 re-emitida |
 | 2026-06-20T15:30:00Z    | RBAC completo: 22 endpoints faltantes añadidos (03 §6.2-§6.6). Total protegidos: 32 de 44 endpoints negocio. 5 tests actualizados para CLIENTE_DISTRITO/CLIENTE_CONDUCTOR. |
-| 2026-06-20T16:00:00Z    | 54/54 endpoints 03 §6 completos: EP-AUTH-01/02/03/04 (login/mfa/refresh/logout) + EP-ADM-01/02/03/04/05 (parametros/vehiculos/mecanicos/usuarios). api/auth_stores.py + api/routes/auth_routes.py + api/routes/admin.py. 820 tests · 0 fallos · check_coverage exit 0 · api 87.5%. Suite incremental actualizada: 780 → 820 tests. Hallazgo colateral: HU-S2-01 existe como endpoint extra no en 03 §6 — no bloquea nada. |
+| 2026-06-20T16:00:00Z    | 55/55 endpoints 03 §6 completos (EP-CAT-07 incluido vía PCT-003): EP-AUTH-01..04 + EP-ADM-01..05. 820 tests · 0 fallos · check_coverage exit 0. |
+| 2026-06-21T01:30:00Z    | PCT-05-002 — corrección de 3 números desactualizados detectados en inicio de sesión: tests 780→820, api/ coverage 91.7%→87.5%, endpoints "54/54"→"55/55". Todos reverificados con comandos crudos en `.venv` aislado del proyecto (CT-AISLAMIENTO-001 resuelto). Hallazgo adicional: asyncpg 0.29.x incompatible con Python 3.14.5 — corregido a 0.30.x en pyproject.toml (`aa24f2a`). |
