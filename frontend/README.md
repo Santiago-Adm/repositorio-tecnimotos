@@ -44,3 +44,15 @@ Esto mantiene el desacoplamiento de layouts a nivel de Next.js Route Groups y as
   - Display: `Quicksand` (Títulos, logotipo, proformas)
   - Body: `Nunito Sans` (Párrafos, botones, alertas)
   - Mono: `Fira Code` (Códigos de repuestos, precios, placas)
+
+---
+
+## 🌐 Configuración de la API (Desarrollo vs Producción)
+
+Actualmente, para el desarrollo local, se utiliza la directiva de reescritura (`rewrites`) en [next.config.mjs](file:///home/san/Proyectos/repositorio-tecnimotos/frontend/next.config.mjs) que actúa como proxy:
+- Redirecciona todas las llamadas locales a `/api-proxy/*` hacia `http://localhost:8010/*`.
+- Este mecanismo evita problemas de CORS y propaga las cookies (incluyendo el `refresh_token`) automáticamente en el origen local.
+
+> [!IMPORTANT]
+> **Revisión para Railway / Staging:**
+> Este proxy fijo es exclusivamente para desarrollo local. Para la fase de Railway/producción, se deberá revaluar este mecanismo, implementando variables de entorno dinámicas (como `NEXT_PUBLIC_API_URL`) para direccionar las peticiones a la URL de backend real en la nube, y asegurar la correcta configuración de CORS/Credentials en el api-server.
