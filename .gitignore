@@ -34,3 +34,4 @@ coverage.xml
 dist/
 .pytest_cache/
 .coverage
+VERIFICACION_MANUAL.md
