@@ -58,7 +58,7 @@ testpaths = ["tests"]
 addopts = "-v --tb=short"
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "api"]
 branch = true
 omit = [
     "src/*/infrastructure/repositories/models/*",
