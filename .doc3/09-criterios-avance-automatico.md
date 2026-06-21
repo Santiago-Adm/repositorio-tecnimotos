@@ -1,5 +1,5 @@
 ---
-version: 1.0.2
+version: 1.1.0
 estado: cerrado
 archivo: "09"
 titulo: Criterios de avance automático
@@ -10,8 +10,8 @@ aprobado: true
 fuente_doc2_unica: 04 requerimientos · 09 especificaciones-tecnicas · 13 registro-ADRs
 fuentes_doc3_referenciadas: 07-criterios-seguridad-ejecutables v1.0.0 · 08-plan-operacion-ejecutable v1.0.0
 tramo_actual: 6 de 6 — criterio de actualización · ubicación · observaciones · fuentes · historial · cierre formal
-cambio: PCT-CONSTRUCCION-001 — añadida §10.1 Regla de integridad numérica en 05-trazabilidad-ligera. Originada en sesión real de construcción: tres cifras distintas de "total de tests" (464→612→682) aparecieron sin verificación cruzada antes de estabilizarse en el número real. Formaliza que ningún número se escribe en 05 sin ejecutar el comando que lo produce en ese momento, y que discrepancias se reportan, nunca se sobrescriben en silencio
-impacto: Protección permanente contra el patrón de error detectado hoy — aplica desde ahora a toda sesión de construcción futura, no solo a esta
+cambio: PCT-009-001 — §11 Gobierno multi-agente añadida. Delimitación dinámica por alcance, prohibición de gobierno cruzado entre agentes, doble confirmación para cierres, DOC-3 como árbitro único. Aprobado por Sant 2026-06-21.
+impacto: Reglas de coordinación permanentes para contexto multi-agente — aplica desde ahora a toda sesión futura
 ---
 # 09 — Criterios de avance automático
 ## Tecnimotos Santi · DOC-3 — Protocolo de construcción
@@ -744,7 +744,52 @@ dejar la discrepancia sin explicar.
 
 ---
 
-## 11. Ubicación en el repositorio
+## §11 — Gobierno multi-agente
+
+§11.1 — Delimitación dinámica por alcance, no por identidad.
+Ningún agente tiene un dominio fijo y permanente. Al inicio de
+cada sesión, Sant asigna explícitamente la carpeta o módulo de
+alcance para esa sesión. El agente queda limitado a leer y
+escribir únicamente dentro de ese alcance asignado, sin importar
+qué modelo o herramienta sea. Antes de cualquier git add/commit,
+el agente verifica con git status que ningún archivo fuera de su
+alcance asignado aparece modificado; si aparece, se detiene y
+reporta antes de continuar (no hace stash, no descarta, no
+commitea).
+
+§11.2 — Ningún agente gobierna a otro directamente. Si un agente
+detecta un hallazgo que pone en duda el trabajo de otro agente o
+de otro dominio, su única acción permitida es: reportar a Sant
+con su análisis técnico completo (qué encontró, por qué le parece
+relevante, evidencia cruda si la tiene desde su propio alcance).
+Queda prohibido que un agente edite, corrija, o ejecute ningún
+cambio sobre archivos fuera de su alcance asignado, incluso si
+está convencido de tener la solución correcta. La autoridad de
+decidir y de instruir la corrección al agente correspondiente es
+exclusiva de Sant.
+
+§11.3 — Cierre de módulo/fase requiere doble confirmación. El
+agente dueño del alcance en curso puede declarar un módulo o
+criterio como cerrado_confirmado en 05-trazabilidad-ligera.md,
+siempre acompañado de evidencia cruda verificable (mismo estándar
+de 09 §10.1). Esa declaración queda en estado provisional hasta
+que Sant la confirme explícitamente. Ningún cierre declarado por
+un agente es definitivo sin esa confirmación humana posterior —
+mismo principio que ya rige el cierre de cada módulo individual
+desde Fase B, extendido ahora a un contexto de múltiples agentes.
+
+§11.4 — DOC-3 como árbitro único. Ningún agente redacta, modifica,
+o propone cambios a esta misma sección de gobierno (§11) ni a las
+reglas que delimitan su propio comportamiento o el de otro agente.
+Cambios a las reglas de gobierno multi-agente se discuten entre
+Sant y un agente en rol de consultor metodológico (no de
+construcción activa en ese momento), y se aplican como PCT formal
+— nunca por edición directa de un agente sobre las reglas que lo
+gobiernan a él mismo.
+
+---
+
+## 12. Ubicación en el repositorio
 ```
 repositorio-tecnimotos/  
 └── .doc3/  
@@ -764,7 +809,7 @@ criterios de avance.
 
 ---
 
-## 12. Observaciones activas — consolidadas de esta construcción
+## 13. Observaciones activas — consolidadas de esta construcción
 
 | ID | Observación | Origen | Estado |
 |---|---|---|---|
@@ -781,7 +826,7 @@ existencia:**
 
 ---
 
-## 13. Fuentes
+## 14. Fuentes
 
 | Documento                                    | Versión | Secciones consultadas                                                                                            |
 | -------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -795,7 +840,7 @@ existencia:**
 
 ---
 
-## 14. Historial de versiones
+## 15. Historial de versiones
 
 | Versión | Fecha | Cambio | Impacto |
 |---|---|---|---|
@@ -809,6 +854,7 @@ existencia:**
 | 1.0.0 | 2026-06 | Tramo 6 — criterio de actualización · ubicación con placeholder `[dominio]` consistente · consolidación · fuentes · historial · cierre formal | Documento completo — 6 de 6 tramos cerrados, reestructuración total completada |
 | 1.0.1 | 2026-06 | PCT-CONSTRUCCION-001 — añadida §10.1 Regla de integridad numérica en 05-trazabilidad-ligera. Originada en sesión real de construcción: tres cifras distintas de "total de tests" (464→612→682) aparecieron sin verificación cruzada antes de estabilizarse en el número real. Formaliza que ningún número se escribe en 05 sin ejecutar el comando que lo produce en ese momento, y que discrepancias se reportan, nunca se sobrescriben en silencio| Protección permanente contra el patrón de error detectado hoy — aplica desde ahora a toda sesión de construcción futura, no solo a esta |
 | 1.0.2 | 2026-06 | PCT-CONSTRUCCION-003 — conteo de endpoints actualizado de 54 a 55 en §9.2 (línea "los 54 indexados") tras formalización de EP-CAT-07 en 03 §6.2 | Mantiene coherencia con 07 v1.0.1 y 03 v1.0.x |
+| 1.1.0 | 2026-06-21 | PCT-009-001 — §11 Gobierno multi-agente añadida (§11.1 delimitación dinámica, §11.2 no gobierno cruzado, §11.3 doble confirmación de cierre, §11.4 DOC-3 árbitro único). Secciones anteriores 11→12, 12→13, 13→14, 14→15. Aprobado por Sant. | Reglas de coordinación permanentes para contexto multi-agente |
 
 ---
 

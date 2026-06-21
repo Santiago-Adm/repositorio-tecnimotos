@@ -38,6 +38,13 @@ request.state.db → XxxRepositoryPG.
 
 ## Estado de módulos
 
+> **Nota de gobierno multi-agente (09 §11.3, PCT-009-001):** de aquí en adelante,
+> los cierres declarados por un agente se registran con `provisional_por_agente: true`
+> hasta confirmación explícita de Sant. Los módulos ya existentes
+> (catalogo · stock · pedidos · taller) mantienen `cerrado_confirmado` sin cambio —
+> fueron confirmados por Sant en su momento. Solo los cierres nuevos posteriores a este
+> PCT llevan el campo provisional.
+
 | Módulo   | Estado              | Criterios 09       | Tests | Commit  |
 |----------|---------------------|--------------------|-------|---------|
 | catalogo | cerrado_confirmado  | 09 §3.1 — 9/10 ✓  | 102   | e41e247 | RepuestoRepositoryPG + 6 tests PG PASS · persistencia verificada (restart) |
