@@ -24,14 +24,23 @@ El sistema está dividido en dos superficies visuales vinculantes declaradas en 
 
 El rol de `VENDEDOR` es transversal y opera en ambas superficies:
 - Consulta el catálogo de repuestos públicamente para asesorar a clientes de manera presencial.
-- Gestiona y emite comprobantes en estado `PENDIENTE_VALIDACION` en la consola interna.
+- Gestiona y emite comprobantes en estado `PENDIENTE_VALIDACION` en la consola interna de facturación.
+- Accede a la consola de taller (`/taller`) para coordinar la aprobación de listas de repuestos e incrementos de precio manuales.
 
 ### Definición de Cambio de Contexto
 Para evitar la complejidad de estados manuales, alternancia de clases en runtime y posibles desfases visuales, **el contexto visual del VENDEDOR depende estrictamente de la ruta navegada**:
 - Al acceder al catálogo público (`/catalogo`), el sistema renderiza el layout del grupo `(public)`, aplicando el tema claro (interfaz pública).
-- Al acceder al panel de facturación y comprobantes (`/facturacion`), el sistema renderiza el layout de `(internal)`, aplicando el tema oscuro (Modo Taller).
+- Al acceder al panel de facturación y comprobantes (`/facturacion`) o de taller (`/taller`), el sistema renderiza el layout de `(internal)`, aplicando el tema oscuro (Modo Taller).
 
-Esto mantiene el desacoplamiento de layouts a nivel de Next.js Route Groups y asegura que el lóbulo visual concuerde con el rol de uso del software en ese preciso instante.
+### Restricciones RBAC de VENDEDOR en Taller
+El `VENDEDOR` tiene capacidades específicas en el flujo de Órdenes de Trabajo (OT) según las reglas validadas:
+1. **Permitido (TAL_VENDEDOR_ROLES):**
+   - Aprobar la lista de repuestos inicial (`aprobar-lista`) para avanzar la OT del estado `ABIERTA` o `LISTA_REPUESTOS` a `EN_EJECUCION`.
+   - Confirmar ítems adicionales agregados durante la ejecución que requieran aprobación manual del cliente (`confirmar-adicional`, para tramos de costo superior a S/100).
+2. **Restringido:**
+   - **NO** puede declarar revisión final (`revision-final`) ni liberar vehículos (`liberar-vehiculo`), que son facultades del equipo técnico (`MECANICO_ROLES`).
+   - **NO** puede registrar cobros parciales (`cobro-parcial`), acción exclusiva de `ADMIN_ROLES`.
+   - **NO** puede cerrar la orden de trabajo (`cerrar`), restringida a `ADMINISTRADOR`, `SUPERADMIN` o `MECANICO_MASTER`.
 
 ---
 
