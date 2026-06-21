@@ -1,0 +1,3574 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tecnimotos API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-01: Login con credenciales",
+        "description": "Público — sin token.\nBloqueo 15 min tras 10 intentos fallidos/IP (07 §2.5).\nInMemory: rate limiting simplificado.",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Login V1 Auth Login Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/mfa": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-02: Verificar MFA y obtener tokens",
+        "description": "Semi-público — requiere mfa_session_token válido (TTL 5 min — 07 §2.4).\nEn InMemory acepta cualquier código 6 dígitos.",
+        "operationId": "mfa_v1_auth_mfa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Mfa V1 Auth Mfa Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-03: Rotar refresh token",
+        "description": "Semi-público — requiere cookie refresh_token válido.\nReplay detection: reuso invalida familia completa (07 §2.3 Escenario 2).",
+        "operationId": "refresh_v1_auth_refresh_post",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Refresh Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Refresh V1 Auth Refresh Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-04: Cerrar sesión",
+        "description": "Todos autenticados — revoca la sesión y elimina cookie (07 §2.3 Escenario 1).",
+        "operationId": "logout_v1_auth_logout_post",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Refresh Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Logout V1 Auth Logout Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/parametros": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-01: Listar parámetros del sistema",
+        "description": "SUPERADMIN · ADMINISTRADOR — lista todos los parámetros configurables.",
+        "operationId": "listar_parametros_v1_admin_parametros_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Parametros V1 Admin Parametros Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/parametros/{clave}": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-02: Actualizar parámetro del sistema",
+        "description": "SUPERADMIN · ADMINISTRADOR — actualiza un parámetro (ABAC-07: solo si modificable_por == ADMINISTRADOR).\nInvalida caché Redis DB-1 (InMemory: actualización directa).",
+        "operationId": "actualizar_parametro_v1_admin_parametros__clave__patch",
+        "parameters": [
+          {
+            "name": "clave",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clave"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarParametroRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Parametro V1 Admin Parametros  Clave  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/vehiculos": {
+      "post": {
+        "tags": [
+          "admin",
+          "vehiculos"
+        ],
+        "summary": "EP-ADM-03: Registrar vehículo",
+        "description": "SUPERADMIN · ADMINISTRADOR · VENDEDOR — registra un vehículo en el sistema.",
+        "operationId": "crear_vehiculo_v1_admin_vehiculos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearVehiculoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Vehiculo V1 Admin Vehiculos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/mecanicos": {
+      "post": {
+        "tags": [
+          "admin",
+          "mecanicos"
+        ],
+        "summary": "EP-ADM-04: Registrar mecánico",
+        "description": "SUPERADMIN · ADMINISTRADOR — registra un mecánico en el sistema.",
+        "operationId": "crear_mecanico_v1_admin_mecanicos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearMecanicoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Mecanico V1 Admin Mecanicos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios": {
+      "post": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-05: Crear usuario",
+        "description": "SUPERADMIN · ADMINISTRADOR — crea usuario.\nNo puede crear SUPERADMIN (03 §6.6).",
+        "operationId": "crear_usuario_v1_admin_usuarios_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearUsuarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Usuario V1 Admin Usuarios Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-01: Buscar repuestos",
+        "description": "Búsqueda por universo, modelo y año. NUNCA devuelve precio_venta.",
+        "operationId": "buscar_repuestos_v1_repuestos_get",
+        "parameters": [
+          {
+            "name": "universo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UniversoRepuesto"
+            }
+          },
+          {
+            "name": "modelo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modelo"
+            }
+          },
+          {
+            "name": "año",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Año"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Buscar Repuestos V1 Repuestos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-03: Crear repuesto",
+        "description": "Crea repuesto nuevo. Solo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "crear_repuesto_v1_repuestos_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearRepuestoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Crear Repuesto V1 Repuestos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-02: Obtener repuesto por código",
+        "description": "Obtiene repuesto por código. NUNCA devuelve precio_venta.",
+        "operationId": "obtener_repuesto_v1_repuestos__codigo__get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Repuesto V1 Repuestos  Codigo  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-05: Dar de baja repuesto (baja lógica)",
+        "description": "Baja lógica — nunca eliminación física. Solo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "dar_de_baja_repuesto_v1_repuestos__codigo__delete",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DarDeBajaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Dar De Baja Repuesto V1 Repuestos  Codigo  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/precio": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-02-B: Consultar precio",
+        "description": "Único endpoint que expone precio_venta.\nDecrementa consultas_precio en sesión si rol CLIENTE_*.",
+        "operationId": "consultar_precio_v1_repuestos__codigo__precio_get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          },
+          {
+            "name": "consultas_realizadas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Consultas Realizadas"
+            }
+          },
+          {
+            "name": "nivel_visibilidad",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Nivel Visibilidad"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Consultar Precio V1 Repuestos  Codigo  Precio Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-04: Actualizar precio de venta",
+        "description": "Actualiza precio. Solo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "actualizar_precio_v1_repuestos__codigo__precio_patch",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarPrecioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Precio V1 Repuestos  Codigo  Precio Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/historial-precio": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-06: Historial de precio",
+        "description": "Historial de cambios de precio. Solo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "historial_precio_v1_repuestos__codigo__historial_precio_get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Historial Precio V1 Repuestos  Codigo  Historial Precio Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/catalogo/repuestos/consulta-lista": {
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "HU-S2-01: Consulta múltiple",
+        "description": "Consulta múltiple por lista de códigos para CLIENTE_DISTRITO (HU-S2-01).",
+        "operationId": "consultar_lista_codigos_v1_catalogo_repuestos_consulta_lista_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsultarListaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Consultar Lista Codigos V1 Catalogo Repuestos Consulta Lista Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stock/{codigo}": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-01: Consultar stock por código",
+        "operationId": "consultar_stock_v1_stock__codigo__get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Consultar Stock V1 Stock  Codigo  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stock": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-02: Listar todo el stock",
+        "operationId": "listar_stock_v1_stock_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Stock V1 Stock Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stock/{codigo}/movimientos": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-03: Historial de movimientos",
+        "operationId": "listar_movimientos_v1_stock__codigo__movimientos_get",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Movimientos V1 Stock  Codigo  Movimientos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stock/{codigo}/ajuste": {
+      "post": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-04: Ajuste manual de stock",
+        "operationId": "ajustar_stock_v1_stock__codigo__ajuste_post",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AjusteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Ajustar Stock V1 Stock  Codigo  Ajuste Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stock/{codigo}/umbral": {
+      "patch": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-05: Actualizar umbral mínimo",
+        "operationId": "actualizar_umbral_v1_stock__codigo__umbral_patch",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UmbralRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Umbral V1 Stock  Codigo  Umbral Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reabastecimientos": {
+      "post": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-06: Crear reabastecimiento",
+        "operationId": "crear_reabastecimiento_v1_reabastecimientos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReabastecimientoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Reabastecimiento V1 Reabastecimientos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reabastecimientos/{reab_id}/estado": {
+      "patch": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-07: Actualizar estado de reabastecimiento",
+        "operationId": "actualizar_estado_reabastecimiento_v1_reabastecimientos__reab_id__estado_patch",
+        "parameters": [
+          {
+            "name": "reab_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reab Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarEstadoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Estado Reabastecimiento V1 Reabastecimientos  Reab Id  Estado Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reabastecimientos/{reab_id}": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "EP-STK-08: Obtener reabastecimiento",
+        "operationId": "obtener_reabastecimiento_v1_reabastecimientos__reab_id__get",
+        "parameters": [
+          {
+            "name": "reab_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reab Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Reabastecimiento V1 Reabastecimientos  Reab Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-01: Crear pedido",
+        "operationId": "crear_pedido_v1_pedidos_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearPedidoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Crear Pedido V1 Pedidos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-02: Listar pedidos",
+        "operationId": "listar_pedidos_v1_pedidos_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cliente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Pedidos V1 Pedidos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}": {
+      "get": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-03: Obtener pedido",
+        "operationId": "obtener_pedido_v1_pedidos__pedido_id__get",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Pedido V1 Pedidos  Pedido Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/confirmar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-04: Confirmar pedido",
+        "operationId": "confirmar_pedido_v1_pedidos__pedido_id__confirmar_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Confirmar Pedido V1 Pedidos  Pedido Id  Confirmar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/cancelar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-05: Cancelar pedido",
+        "operationId": "cancelar_pedido_v1_pedidos__pedido_id__cancelar_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelarPedidoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancelar Pedido V1 Pedidos  Pedido Id  Cancelar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reservas": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-06: Crear reserva",
+        "operationId": "crear_reserva_v1_reservas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReservaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Reserva V1 Reservas Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reservas/{reserva_id}/liberar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-07: Liberar reserva",
+        "operationId": "liberar_reserva_v1_reservas__reserva_id__liberar_post",
+        "parameters": [
+          {
+            "name": "reserva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reserva Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiberarReservaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Liberar Reserva V1 Reservas  Reserva Id  Liberar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/proforma": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-08: Emitir proforma",
+        "operationId": "emitir_proforma_v1_pedidos__pedido_id__proforma_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Emitir Proforma V1 Pedidos  Pedido Id  Proforma Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/envio": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-09: Registrar envío",
+        "operationId": "registrar_envio_v1_pedidos__pedido_id__envio_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrarEnvioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Registrar Envio V1 Pedidos  Pedido Id  Envio Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/confirmar-recepcion": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-10: Confirmar recepción",
+        "operationId": "confirmar_recepcion_v1_pedidos__pedido_id__confirmar_recepcion_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Confirmar Recepcion V1 Pedidos  Pedido Id  Confirmar Recepcion Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/incidencia": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-11: Registrar incidencia",
+        "operationId": "registrar_incidencia_v1_pedidos__pedido_id__incidencia_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Registrar Incidencia V1 Pedidos  Pedido Id  Incidencia Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notificaciones/repuesto-disponible": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-12: Solicitar notificación cuando repuesto esté disponible",
+        "operationId": "solicitar_notificacion_repuesto_v1_notificaciones_repuesto_disponible_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Solicitar Notificacion Repuesto V1 Notificaciones Repuesto Disponible Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lista-reserva-progresiva": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-13: Crear lista de reserva progresiva",
+        "operationId": "crear_lista_reserva_v1_lista_reserva_progresiva_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearListaReservaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Lista Reserva V1 Lista Reserva Progresiva Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lista-reserva-progresiva/{lista_id}/formalizar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-14: Formalizar lista de reserva progresiva",
+        "operationId": "formalizar_lista_reserva_v1_lista_reserva_progresiva__lista_id__formalizar_post",
+        "parameters": [
+          {
+            "name": "lista_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lista Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Formalizar Lista Reserva V1 Lista Reserva Progresiva  Lista Id  Formalizar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/comprobante": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-15: Generar comprobante",
+        "operationId": "generar_comprobante_v1_pedidos__pedido_id__comprobante_post",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerarComprobanteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Generar Comprobante V1 Pedidos  Pedido Id  Comprobante Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/comprobantes/{comprobante_id}/aprobar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-16: Aprobar y emitir comprobante",
+        "operationId": "aprobar_comprobante_v1_comprobantes__comprobante_id__aprobar_post",
+        "parameters": [
+          {
+            "name": "comprobante_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comprobante Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Aprobar Comprobante V1 Comprobantes  Comprobante Id  Aprobar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/comprobantes/{comprobante_id}/anular": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-17: Anular comprobante",
+        "operationId": "anular_comprobante_v1_comprobantes__comprobante_id__anular_post",
+        "parameters": [
+          {
+            "name": "comprobante_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comprobante Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Anular Comprobante V1 Comprobantes  Comprobante Id  Anular Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-01: Abrir orden de trabajo",
+        "operationId": "abrir_ot_v1_ordenes_trabajo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbrirOTRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Abrir Ot V1 Ordenes Trabajo Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/repuestos": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-02: Agregar repuesto a orden de trabajo",
+        "operationId": "agregar_repuesto_v1_ordenes_trabajo__ot_id__repuestos_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgregarRepuestoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Agregar Repuesto V1 Ordenes Trabajo  Ot Id  Repuestos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/aprobar-lista": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-03: Aprobar lista → EN_EJECUCION",
+        "operationId": "aprobar_lista_v1_ordenes_trabajo__ot_id__aprobar_lista_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Aprobar Lista V1 Ordenes Trabajo  Ot Id  Aprobar Lista Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/confirmar-adicional": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-04: Cliente confirma costo adicional manual",
+        "operationId": "confirmar_adicional_v1_ordenes_trabajo__ot_id__confirmar_adicional_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarAdicionalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Confirmar Adicional V1 Ordenes Trabajo  Ot Id  Confirmar Adicional Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/autorizar-precio": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-05: Autorizar visibilidad de precio al cliente",
+        "operationId": "autorizar_precio_v1_ordenes_trabajo__ot_id__autorizar_precio_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutorizarPrecioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Autorizar Precio V1 Ordenes Trabajo  Ot Id  Autorizar Precio Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/revision-final": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-06: Declarar revisión final → REVISION_FINAL",
+        "operationId": "revision_final_v1_ordenes_trabajo__ot_id__revision_final_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionFinalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Revision Final V1 Ordenes Trabajo  Ot Id  Revision Final Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/cobro-parcial": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-07: Registrar cobro parcial con excepción 80%",
+        "operationId": "cobro_parcial_v1_ordenes_trabajo__ot_id__cobro_parcial_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CobroParcialRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cobro Parcial V1 Ordenes Trabajo  Ot Id  Cobro Parcial Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/cerrar": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-08: Cerrar orden de trabajo",
+        "operationId": "cerrar_ot_v1_ordenes_trabajo__ot_id__cerrar_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cerrar Ot V1 Ordenes Trabajo  Ot Id  Cerrar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/cancelar": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-09: Cancelar orden de trabajo",
+        "operationId": "cancelar_ot_v1_ordenes_trabajo__ot_id__cancelar_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelarOTRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancelar Ot V1 Ordenes Trabajo  Ot Id  Cancelar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/liberar-vehiculo": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-10: Liberar vehículo tras prueba de ruta",
+        "operationId": "liberar_vehiculo_v1_ordenes_trabajo__ot_id__liberar_vehiculo_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Liberar Vehiculo V1 Ordenes Trabajo  Ot Id  Liberar Vehiculo Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/taller/disponibilidad": {
+      "get": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-11: Consultar disponibilidad de mecánicos",
+        "operationId": "consultar_disponibilidad_v1_taller_disponibilidad_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Consultar Disponibilidad V1 Taller Disponibilidad Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}": {
+      "get": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-12: Obtener orden de trabajo",
+        "operationId": "obtener_ot_v1_ordenes_trabajo__ot_id__get",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Ot V1 Ordenes Trabajo  Ot Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "tags": [
+          "observabilidad"
+        ],
+        "summary": "EP-OBS-01: Métricas cuatro señales doradas",
+        "operationId": "metrics_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Metrics V1 Metrics Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/privacidad": {
+      "get": {
+        "tags": [
+          "legal"
+        ],
+        "summary": "EP-OBS-02: Política de privacidad",
+        "operationId": "politica_privacidad_v1_privacidad_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Politica Privacidad V1 Privacidad Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AbrirOTRequest": {
+        "properties": {
+          "vehiculo_id": {
+            "type": "string",
+            "title": "Vehiculo Id"
+          },
+          "mecanico_master_id": {
+            "type": "string",
+            "title": "Mecanico Master Id"
+          },
+          "modalidad": {
+            "$ref": "#/components/schemas/ModalidadIntervencion"
+          },
+          "urgencia": {
+            "$ref": "#/components/schemas/NivelUrgencia"
+          },
+          "mecanico_junior_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mecanico Junior Id"
+          },
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vehiculo_id",
+          "mecanico_master_id",
+          "modalidad",
+          "urgencia"
+        ],
+        "title": "AbrirOTRequest"
+      },
+      "ActualizarEstadoRequest": {
+        "properties": {
+          "estado": {
+            "$ref": "#/components/schemas/EstadoReabastecimiento"
+          },
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "actor_id"
+        ],
+        "title": "ActualizarEstadoRequest"
+      },
+      "ActualizarParametroRequest": {
+        "properties": {
+          "valor": {
+            "title": "Valor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor"
+        ],
+        "title": "ActualizarParametroRequest"
+      },
+      "ActualizarPrecioRequest": {
+        "properties": {
+          "precio_venta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Precio Venta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "precio_venta"
+        ],
+        "title": "ActualizarPrecioRequest"
+      },
+      "AgregarRepuestoRequest": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Codigo"
+          },
+          "cantidad": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "cantidad"
+        ],
+        "title": "AgregarRepuestoRequest"
+      },
+      "AjusteRequest": {
+        "properties": {
+          "cantidad": {
+            "type": "integer",
+            "title": "Cantidad"
+          },
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "cantidad",
+          "actor_id"
+        ],
+        "title": "AjusteRequest"
+      },
+      "AutorizarPrecioRequest": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id"
+        ],
+        "title": "AutorizarPrecioRequest"
+      },
+      "CancelarOTRequest": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "CancelarOTRequest"
+      },
+      "CancelarPedidoRequest": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Motivo"
+          },
+          "es_cliente": {
+            "type": "boolean",
+            "title": "Es Cliente",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "CancelarPedidoRequest"
+      },
+      "CategoriaRepuesto": {
+        "type": "string",
+        "enum": [
+          "motor",
+          "transmision",
+          "frenos",
+          "electrico",
+          "carroceria",
+          "suspension",
+          "tecnico_especializado",
+          "consumible",
+          "otro"
+        ],
+        "title": "CategoriaRepuesto"
+      },
+      "CobroParcialRequest": {
+        "properties": {
+          "monto_pagado": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Monto Pagado"
+          },
+          "plazo_dias": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Plazo Dias"
+          }
+        },
+        "type": "object",
+        "required": [
+          "monto_pagado",
+          "plazo_dias"
+        ],
+        "title": "CobroParcialRequest"
+      },
+      "ConfirmarAdicionalRequest": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "ConfirmarAdicionalRequest"
+      },
+      "ConsultarListaRequest": {
+        "properties": {
+          "codigos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Codigos"
+          },
+          "universo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UniversoRepuesto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigos"
+        ],
+        "title": "ConsultarListaRequest"
+      },
+      "CrearListaReservaRequest": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemListaRequest"
+            },
+            "type": "array",
+            "minItems": 0,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "items"
+        ],
+        "title": "CrearListaReservaRequest"
+      },
+      "CrearMecanicoRequest": {
+        "properties": {
+          "usuario_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Usuario Id"
+          },
+          "nivel": {
+            "type": "string",
+            "pattern": "^(MASTER|JUNIOR)$",
+            "title": "Nivel"
+          },
+          "supervisor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usuario_id",
+          "nivel"
+        ],
+        "title": "CrearMecanicoRequest"
+      },
+      "CrearPedidoRequest": {
+        "properties": {
+          "canal_origen": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Canal Origen"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemInput"
+            },
+            "type": "array",
+            "minItems": 0,
+            "title": "Items"
+          },
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          },
+          "orden_trabajo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden Trabajo Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "canal_origen",
+          "items"
+        ],
+        "title": "CrearPedidoRequest"
+      },
+      "CrearReabastecimientoRequest": {
+        "properties": {
+          "proveedor": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Proveedor"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemReabRequest"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          },
+          "notas": {
+            "type": "string",
+            "title": "Notas",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "proveedor",
+          "items"
+        ],
+        "title": "CrearReabastecimientoRequest"
+      },
+      "CrearRepuestoRequest": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Codigo"
+          },
+          "nombre": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "universo": {
+            "$ref": "#/components/schemas/UniversoRepuesto"
+          },
+          "modelo": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Modelo"
+          },
+          "año": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 1990.0,
+            "title": "Año"
+          },
+          "categoria": {
+            "$ref": "#/components/schemas/CategoriaRepuesto"
+          },
+          "precio_venta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Precio Venta"
+          },
+          "descripcion": {
+            "type": "string",
+            "title": "Descripcion",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "nombre",
+          "universo",
+          "modelo",
+          "año",
+          "categoria",
+          "precio_venta"
+        ],
+        "title": "CrearRepuestoRequest"
+      },
+      "CrearReservaRequest": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "repuesto_id": {
+            "type": "string",
+            "title": "Repuesto Id"
+          },
+          "cantidad": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad"
+          },
+          "segmento": {
+            "$ref": "#/components/schemas/SegmentoCliente"
+          },
+          "pedido_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "repuesto_id",
+          "cantidad",
+          "segmento"
+        ],
+        "title": "CrearReservaRequest"
+      },
+      "CrearUsuarioRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "consentimiento_privacidad": {
+            "type": "boolean",
+            "title": "Consentimiento Privacidad",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nombre",
+          "rol",
+          "password"
+        ],
+        "title": "CrearUsuarioRequest"
+      },
+      "CrearVehiculoRequest": {
+        "properties": {
+          "universo": {
+            "type": "string",
+            "pattern": "^(mototaxi|motolineal)$",
+            "title": "Universo"
+          },
+          "modelo": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Modelo"
+          },
+          "año": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 1990.0,
+            "title": "Año"
+          },
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          },
+          "placa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placa"
+          }
+        },
+        "type": "object",
+        "required": [
+          "universo",
+          "modelo",
+          "año"
+        ],
+        "title": "CrearVehiculoRequest"
+      },
+      "DarDeBajaRequest": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "DarDeBajaRequest"
+      },
+      "EstadoReabastecimiento": {
+        "type": "string",
+        "enum": [
+          "SOLICITADO",
+          "CONFIRMADO_PROVEEDOR",
+          "EN_TRANSITO",
+          "RECIBIDO",
+          "CANCELADO"
+        ],
+        "title": "EstadoReabastecimiento"
+      },
+      "GenerarComprobanteRequest": {
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoComprobante"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Monto"
+          },
+          "emitido_por": {
+            "type": "string",
+            "title": "Emitido Por"
+          },
+          "rol_emisor": {
+            "type": "string",
+            "title": "Rol Emisor"
+          },
+          "ruc_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ruc Cliente"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto",
+          "emitido_por",
+          "rol_emisor"
+        ],
+        "title": "GenerarComprobanteRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ItemInput": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "cantidad": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "cantidad"
+        ],
+        "title": "ItemInput"
+      },
+      "ItemListaRequest": {
+        "properties": {
+          "repuesto_id": {
+            "type": "string",
+            "title": "Repuesto Id"
+          },
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "cantidad": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad"
+          },
+          "precio_referencia": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Precio Referencia"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repuesto_id",
+          "codigo",
+          "cantidad",
+          "precio_referencia"
+        ],
+        "title": "ItemListaRequest"
+      },
+      "ItemReabRequest": {
+        "properties": {
+          "repuesto_id": {
+            "type": "string",
+            "title": "Repuesto Id"
+          },
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "cantidad_solicitada": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad Solicitada"
+          },
+          "precio_costo_unitario": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Precio Costo Unitario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repuesto_id",
+          "codigo",
+          "cantidad_solicitada",
+          "precio_costo_unitario"
+        ],
+        "title": "ItemReabRequest"
+      },
+      "LiberarReservaRequest": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "title": "Motivo",
+            "default": "LIBERADA_MANUAL"
+          }
+        },
+        "type": "object",
+        "title": "LiberarReservaRequest"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "MfaRequest": {
+        "properties": {
+          "mfa_session_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mfa Session Token"
+          },
+          "totp_code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Totp Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mfa_session_token",
+          "totp_code"
+        ],
+        "title": "MfaRequest"
+      },
+      "ModalidadIntervencion": {
+        "type": "string",
+        "enum": [
+          "preventivo",
+          "correctivo",
+          "diagnostico",
+          "soldadura"
+        ],
+        "title": "ModalidadIntervencion",
+        "description": "Modalidad de la intervención sobre el vehículo (02 §1.3)."
+      },
+      "NivelUrgencia": {
+        "type": "string",
+        "enum": [
+          "alta",
+          "media",
+          "baja"
+        ],
+        "title": "NivelUrgencia"
+      },
+      "RegistrarEnvioRequest": {
+        "properties": {
+          "empresa_encomienda": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Empresa Encomienda"
+          },
+          "direccion_destino": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Direccion Destino"
+          }
+        },
+        "type": "object",
+        "required": [
+          "empresa_encomienda",
+          "direccion_destino"
+        ],
+        "title": "RegistrarEnvioRequest"
+      },
+      "RevisionFinalRequest": {
+        "properties": {
+          "costo_mano_obra": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Costo Mano Obra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "costo_mano_obra"
+        ],
+        "title": "RevisionFinalRequest"
+      },
+      "SegmentoCliente": {
+        "type": "string",
+        "enum": [
+          "CLIENTE_CONDUCTOR",
+          "CLIENTE_DISTRITO",
+          "CLIENTE_FLOTA_DUENO",
+          "CLIENTE_FLOTA_CONDUCTOR",
+          "CLIENTE_RURAL",
+          "CLIENTE_MOTOLINEAL"
+        ],
+        "title": "SegmentoCliente"
+      },
+      "TipoComprobante": {
+        "type": "string",
+        "enum": [
+          "boleta",
+          "factura",
+          "ticket"
+        ],
+        "title": "TipoComprobante"
+      },
+      "UmbralRequest": {
+        "properties": {
+          "umbral_minimo": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Umbral Minimo"
+          },
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "umbral_minimo",
+          "actor_id"
+        ],
+        "title": "UmbralRequest"
+      },
+      "UniversoRepuesto": {
+        "type": "string",
+        "enum": [
+          "mototaxi",
+          "motolineal"
+        ],
+        "title": "UniversoRepuesto"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
