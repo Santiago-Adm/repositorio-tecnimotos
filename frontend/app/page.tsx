@@ -1,6 +1,12 @@
+"use client";
+
 import React from "react";
+import Link from "next/link";
+import { useAuth } from "@/src/context/AuthContext";
 
 export default function Home() {
+  const { user, logout, loading } = useAuth();
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-body transition-colors duration-300">
       {/* Premium Header */}
@@ -24,6 +30,32 @@ export default function Home() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Backend Conectado
           </span>
+
+          {!loading && (
+            <>
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-mono font-bold text-slate-700">{user.id}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-teal-600 font-semibold">{user.rol}</p>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="bg-slate-100 hover:bg-slate-250 text-slate-700 font-medium px-4 py-2 rounded-xl text-xs transition-colors border border-slate-250"
+                  >
+                    Salir
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  href="/login"
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-xl text-xs transition-colors shadow-sm shadow-teal-500/10"
+                >
+                  Iniciar Sesión
+                </Link>
+              )}
+            </>
+          )}
         </div>
       </header>
 
@@ -36,22 +68,24 @@ export default function Home() {
               Sistema de Asistencia SANTI • MVP Fase 1
             </div>
             <h2 className="text-4xl md:text-5xl font-display font-extrabold text-slate-950 tracking-tight leading-none">
-              Gestión Inteligente de <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-electric-600">Taller y Repuestos</span>
+              Gestión Inteligente de{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-electric-600">
+                Taller y Repuestos
+              </span>
             </h2>
             <p className="text-slate-600 max-w-2xl text-base leading-relaxed">
-              Plataforma unificada para clientes y mecánicos de Tecnimotos Santi (Ayacucho, Perú). 
-              Consulta stock en tiempo real, solicita reservas y gestiona órdenes de trabajo al instante.
+              Plataforma unificada para clientes y mecánicos de Tecnimotos Santi (Ayacucho, Perú). Consulta stock en
+              tiempo real, solicita reservas y gestiona órdenes de trabajo al instante.
             </p>
           </div>
         </section>
 
         {/* Dual-surface Portal Selection */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
           {/* Public Portal (Light Interface) */}
           <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col justify-between shadow-xl shadow-slate-100 hover:shadow-2xl hover:shadow-slate-200/80 transition-all duration-300 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full -mr-8 -mt-8 group-hover:scale-125 transition-transform duration-500"></div>
-            
+
             <div className="space-y-6 z-10">
               <div className="flex items-center justify-between">
                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 border border-teal-100 text-teal-800">
@@ -63,53 +97,67 @@ export default function Home() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-2xl font-display font-bold text-slate-900">
-                  Portal Público y Catálogo
-                </h3>
+                <h3 className="text-2xl font-display font-bold text-slate-900">Portal Público y Catálogo</h3>
                 <p className="text-slate-600 text-sm">
-                  Optimizado para clientes conductores (S1), mecánicos de distrito (S2) y zonas rurales (S4) con conectividad reducida.
+                  Optimizado para clientes conductores (S1), mecánicos de distrito (S2) y zonas rurales (S4) con
+                  conectividad reducida.
                 </p>
               </div>
 
               {/* Action Buttons / Routes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/catalogo" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-800 group-hover/card:text-teal-700 text-sm">
                     🔍 Búsqueda de Repuestos
                   </h4>
                   <p className="text-xs text-slate-500 mt-1">Consultar disponibilidad y precios por modelo o año.</p>
-                </div>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/reservas" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-800 group-hover/card:text-teal-700 text-sm">
                     📅 Reservas Express
                   </h4>
                   <p className="text-xs text-slate-500 mt-1">Separa tu repuesto con TTL automático antes de viajar.</p>
-                </div>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/lotes" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-800 group-hover/card:text-teal-700 text-sm">
                     📦 Pedidos por Lote
                   </h4>
                   <p className="text-xs text-slate-500 mt-1">Lista de reserva progresiva y despacho a distritos.</p>
-                </div>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-teal-300 hover:bg-teal-50/20 transition-all duration-200 cursor-pointer group/card">
-                  <h4 className="font-display font-semibold text-slate-800 group-hover/card:text-teal-700 text-sm">
-                    📄 Proformas Digitales
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">Generar cotizaciones descargables en formato PDF.</p>
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 opacity-60 text-slate-400 text-xs">
+                  <h4 className="font-display font-semibold text-slate-500 text-sm">📄 Proformas Digitales</h4>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Generar cotizaciones descargables PDF (Próximamente).
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
               <div className="text-xs text-slate-500">
-                Rol: <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">CLIENTE_*</span>
+                Rol:{" "}
+                <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">
+                  {user ? user.rol : "CLIENTE_*"}
+                </span>
               </div>
-              <button className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-teal-500/10 text-sm">
+              <Link
+                href={user ? "/catalogo" : "/login"}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-medium px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-teal-500/10 text-sm block text-center"
+              >
                 Ingresar al Catálogo
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -128,62 +176,83 @@ export default function Home() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-2xl font-display font-bold text-white">
-                  Consola Operativa SANTI
-                </h3>
+                <h3 className="text-2xl font-display font-bold text-white">Consola Operativa SANTI</h3>
                 <p className="text-slate-400 text-sm">
-                  Espacio de trabajo interno en &quot;Modo Taller&quot; para mecánicos, administradores y vendedores. Diseñado para reducir fatiga visual.
+                  Espacio de trabajo interno en &quot;Modo Taller&quot; para mecánicos, administradores y vendedores.
+                  Diseñado para reducir fatiga visual.
                 </p>
               </div>
 
               {/* Action Buttons / Routes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/taller" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-200 group-hover/card:text-electric-400 text-sm">
                     🛠️ Control de Taller (OT)
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">Apertura, consumo de repuestos y cierre de órdenes.</p>
-                </div>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/stock" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-200 group-hover/card:text-electric-400 text-sm">
                     📈 Gestión de Stock
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">Control de movimientos, alertas y reabastecimiento.</p>
-                </div>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/facturacion" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-200 group-hover/card:text-electric-400 text-sm">
                     🧾 Emisión de Comprobantes
                   </h4>
-                  <p className="text-xs text-slate-400 mt-1">Validación tributaria de boletas/facturas y notas de crédito.</p>
-                </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Validación tributaria de boletas/facturas y notas de crédito.
+                  </p>
+                </Link>
 
-                <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card">
+                <Link
+                  href={user ? "/admin" : "/login"}
+                  className="p-4 rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-electric-500/50 hover:bg-electric-950/15 transition-all duration-200 cursor-pointer group/card block"
+                >
                   <h4 className="font-display font-semibold text-slate-200 group-hover/card:text-electric-400 text-sm">
                     👥 Control de Usuarios
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">Configuración ABAC/RBAC, MFA y perfiles de mecánicos.</p>
-                </div>
+                </Link>
               </div>
             </div>
 
             <div className="mt-8 pt-6 border-t border-slate-800/80 flex items-center justify-between">
               <div className="text-xs text-slate-400">
-                Roles: <span className="font-mono bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">ADMIN, MECANICO_*, VENDEDOR</span>
+                Roles:{" "}
+                <span className="font-mono bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                  {user ? user.rol : "ADMIN, MECANICO_*, VENDEDOR"}
+                </span>
               </div>
-              <button className="bg-gradient-to-r from-teal-600 to-electric-600 hover:from-teal-500 hover:to-electric-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-electric-900/20 text-sm">
+              <Link
+                href={user ? "/taller" : "/login"}
+                className="bg-gradient-to-r from-teal-600 to-electric-600 hover:from-teal-500 hover:to-electric-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-electric-900/20 text-sm block text-center"
+              >
                 Consola Taller
-              </button>
+              </Link>
             </div>
           </div>
-
         </div>
       </main>
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white/50 px-6 py-6 text-center text-xs text-slate-500">
-        <p>© 2026 Tecnimotos Santi. Todos los derechos reservados. Desarrollado bajo protocolo de conformidad de marca SANTI.</p>
+        <p>
+          © 2026 Tecnimotos Santi. Todos los derechos reservados. Desarrollado bajo protocolo de conformidad de marca
+          SANTI.
+        </p>
       </footer>
     </div>
   );
