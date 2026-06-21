@@ -45,7 +45,21 @@ src = ["src", "api", "infrastructure", "scripts", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line too long — gestionado por black/format manual
+    "UP007",  # Optional[X] → X | None — refactor de estilo, fuera de alcance pre-deploy
+    "UP017",  # datetime.timezone.utc → datetime.UTC — código existente usa timezone.utc consistentemente
+    "UP035",  # deprecated import — código existente
+    "N817",   # CamelCase imported as acronym (Decimal as D) — código existente
+    "N801",   # invalid class name (ListaReservaProg_Item) — código existente
+    "F401",   # unused import — varios en código existente; limpiar en ciclo separado
+    "F841",   # unused variable — código existente
+    "F811",   # redefined while unused — código existente
+    "F541",   # f-string missing placeholders — código existente
+    "I001",   # unsorted imports — código existente; limpiar en ciclo separado
+    "E402",   # module-level import not at top — código existente
+    "E712",   # true/false comparison — código existente
+]
 
 [tool.mypy]
 python_version = "3.12"

@@ -184,11 +184,19 @@ async def crear_mecanico(
 
 # ── EP-ADM-05 — Crear usuario ─────────────────────────────────────────────────
 
+_ROLES_CLIENTE = {
+    "CLIENTE_CONDUCTOR", "CLIENTE_DISTRITO", "CLIENTE_RURAL",
+    "CLIENTE_FLOTA_DUENO", "CLIENTE_FLOTA_CONDUCTOR", "CLIENTE_MOTOLINEAL",
+}
+
+
 class CrearUsuarioRequest(BaseModel):
     email: str = Field(min_length=5, max_length=200)
     nombre: str = Field(min_length=1, max_length=200)
     rol: str
     password: str = Field(min_length=8)
+    # Requerido y debe ser True para roles CLIENTE_* — 08 §8.1 Legal (Ley N.° 29733)
+    consentimiento_privacidad: bool = Field(default=False)
 
 
 _ROLES_VALIDOS = {
@@ -219,6 +227,17 @@ async def crear_usuario(
             detail=error_response(
                 "VALIDACION_FALLIDA",
                 f"Rol {body.rol!r} inválido o no autorizado en este endpoint",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    # Ley N.° 29733: consentimiento explícito requerido para datos personales de clientes
+    if body.rol in _ROLES_CLIENTE and not body.consentimiento_privacidad:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                "consentimiento_privacidad debe ser true para roles de cliente (Ley N.° 29733)",
                 request_id=get_request_id(request),
             ),
         )
