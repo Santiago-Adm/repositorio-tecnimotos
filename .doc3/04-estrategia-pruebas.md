@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.0.1
 estado: cerrado
 bloque: E
 seccion: "04"
@@ -150,8 +150,25 @@ potencialmente pública.
 | `catalogo` | Dominio | ≥ 90% | Branch |
 | `pedidos` | Dominio | ≥ 90% | Branch |
 | `taller` | Dominio | ≥ 85% | Branch |
-| Infraestructura (todos los módulos) | `infrastructure/` | ≥ 70% | Line |
-| Transversal | `shared/` · `api/` | ≥ 80% | Branch |
+| Infraestructura (todos los módulos, incluyendo `shared`) | `infrastructure/` | ≥ 70% | Line |
+| `shared` | Dominio (`shared/domain/`) | ≥ 80% | Branch |
+| `api` | — | ≥ 80% | Branch (pendiente de confirmar ubicación real — ver investigación en curso) |
+
+Nota de corrección (2026-06-20): el umbral original trataba
+"shared" como bloque único de 80% branch, sin distinguir
+dominio de infraestructura — inconsistente con el patrón ya
+aplicado a los 4 módulos de negocio, donde infraestructura
+real (conexiones DB, Redis, Fernet) está excluida de medición
+branch por requerir recursos reales no disponibles en tests
+unitarios (mismo criterio que excluye
+`infrastructure/repositories/models/*` en pyproject.toml §3.2
+de 03-diseno-sistema). shared/domain/ (ports puros) sí alcanza
+80%+ branch en unitarios sin dependencias externas — verificado
+en 100% real durante construcción. shared/infrastructure/
+(event_bus.py, database.py, fernet.py) se mide bajo el mismo
+criterio de line ≥ 70% que el resto de infraestructura, no
+branch — sus ramas de manejo de error de Redis/PostgreSQL/
+Fernet requieren integración real, nunca unitarios con fakes.
 
 ### 3.2 Configuración ejecutable — `pyproject.toml`
 
