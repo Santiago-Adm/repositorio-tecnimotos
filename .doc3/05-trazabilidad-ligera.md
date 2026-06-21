@@ -74,8 +74,8 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 |---------------------------------------------------|----------------------------------------------------|
 | `scripts/verify_seed.py` existe (CT-11-02)        | ✓ resuelto — script completo con logging JSON      |
 | `scripts/reencrypt_fernet.py` existe (CT-11-01)   | ✓ resuelto — script completo con --dry-run         |
-| Seed nivel 2 en staging                           | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
-| E2E staging verde                                 | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
+| Seed nivel 2 en staging                           | ✓ seed_nivel2_postgres() implementado · verify_seed --level=2 PASS 23/23 criterios (local, commit `632f73f`) |
+| E2E staging verde                                 | ⟳ pendiente — compuerta #2 (DATABASE_URL Railway) |
 | Checklist pre-deploy 08 §8.1 completo             | ⟳ próximo paso — LEGAL y Validación Elena pendientes |
 
 ### §9.4 Bloqueos duros — ninguno activo
