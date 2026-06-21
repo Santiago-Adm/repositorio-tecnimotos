@@ -1,5 +1,5 @@
 ---
-version: 1.3.0
+version: 1.4.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: listo_para_predeploy
@@ -33,7 +33,7 @@ de esta construcción.
 | pedidos  | cerrado_confirmado  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 |
 | taller   | cerrado_confirmado  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 |
 
-Todos los módulos: `cerrado_confirmado`. Suite completa actual: **820 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T01:30, entorno `.venv` aislado del proyecto).
+Todos los módulos: `cerrado_confirmado`. Suite completa actual: **831 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T11:00, entorno `.venv` aislado del proyecto).
 
 Nota: los conteos por módulo de la tabla (102+178+184+148 = 612) son históricos. Los 820 incluyen: 5 suites LSP (`42100f4`), scripts CT-11-01/CT-11-02 (`44c4127`), auth middleware + cobertura api/ + shared/ (`03a0c4f`), tests auth_stores y error_handlers (`6944b4f`).
 
@@ -49,8 +49,8 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 | Ítem                                              | Resultado                                          |
 |---------------------------------------------------|----------------------------------------------------|
 | 4 módulos — todos los criterios de módulo         | ✓ cerrado_confirmado por Sant                      |
-| Suite completa sin regresiones (09 §6)            | ✓ **820 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T01:30 (entorno aislado) |
-| check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 87.5%** · infra 98.9% (verificado en entorno aislado) |
+| Suite completa sin regresiones (09 §6)            | ✓ **831 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T11:00 (entorno aislado) |
+| check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 86.2%** · infra 85.5% (verificado en entorno aislado) |
 | Pipeline CI/CD verde en main                      | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
 | OpenAPI 4 módulos válidos                         | ✓ 7 · 17 · 8 · 12 endpoints (44 negocio)          |
 | **55/55** endpoints 03 §6 implementados           | ✓ 44 negocio + EP-AUTH-01/02/03/04/05 + EP-ADM-01/02/03/04/05 + EP-CAT-07 (PCT-003) |
@@ -112,3 +112,4 @@ Ninguna.
 | 2026-06-20T15:30:00Z    | RBAC completo: 22 endpoints faltantes añadidos (03 §6.2-§6.6). Total protegidos: 32 de 44 endpoints negocio. 5 tests actualizados para CLIENTE_DISTRITO/CLIENTE_CONDUCTOR. |
 | 2026-06-20T16:00:00Z    | 55/55 endpoints 03 §6 completos (EP-CAT-07 incluido vía PCT-003): EP-AUTH-01..04 + EP-ADM-01..05. 820 tests · 0 fallos · check_coverage exit 0. |
 | 2026-06-21T01:30:00Z    | PCT-05-002 — corrección de 3 números desactualizados detectados en inicio de sesión: tests 780→820, api/ coverage 91.7%→87.5%, endpoints "54/54"→"55/55". Todos reverificados con comandos crudos en `.venv` aislado del proyecto (CT-AISLAMIENTO-001 resuelto). Hallazgo adicional: asyncpg 0.29.x incompatible con Python 3.14.5 — corregido a 0.30.x en pyproject.toml (`aa24f2a`). |
+| 2026-06-21T11:00:00Z    | Sesión pre-deploy: bloques DESPLIEGUE + SEGURIDAD + LEGAL + OBSERVABILIDAD del checklist 08 §8.1. Construidos: Dockerfile · .dockerignore · docker-compose.yml · .env.example · ci.yml expandido (4 módulos + trivy + pip-audit) · reset-precio.yml · e2e-nightly.yml · rate_limiter.py · metrics_collector.py · /v1/metrics · /v1/privacidad · consentimiento_privacidad en EP-ADM-05 · 11 tests E2E (E2E-01/02/03). Suite: 820→831 tests · 0 fallos · check_coverage.py exit 0 · ruff OK (commit `72be97d`). |
