@@ -1,5 +1,5 @@
 ---
-version: 1.0.2
+version: 1.0.3
 estado: cerrado
 bloque: E
 seccion: "03"
@@ -84,13 +84,6 @@ repositorio-tecnimotos/
 ├── api/  
 │ ├── routes/  
 │ └── dependencies.py  
-├── infrastructure/  
-│ ├── database/  
-│ ├── redis/  
-│ ├── notifications/  
-│ ├── llm/  
-│ │ └── prompts/  
-│ └── factories.py  
 ├── scripts/  
 │ ├── check_dip.py  
 │ └── seed/  
@@ -100,7 +93,10 @@ repositorio-tecnimotos/
 │ ├── integration/  
 │ └── e2e/  
 ├── infra/  
-│ └── terraform/  
+│ └── terraform/   ← placeholder Fase 2+ (Hetzner/IaC, 08 §3.3)  
+│                    Se llena al migrar de Railway a Hetzner.  
+│                    Vacía intencionalmente en MVP (Fase 1 Railway  
+│                    no usa Terraform — 08 §3.2).  
 ├── .github/  
 │ └── workflows/  
 ├── docker-compose.yml  
@@ -108,6 +104,20 @@ repositorio-tecnimotos/
 ├── docker-compose.prod.yml  
 └── pyproject.toml
 ```
+**Nota PCT-003 (HALLAZGO-INFRA-001/002, 2026-06-21):**
+La carpeta `infrastructure/` raíz que aparecía en versiones anteriores de
+este árbol fue eliminada del repositorio — nunca tuvo contenido real y
+divergía de la arquitectura construida. Sus responsabilidades están cubiertas:
+
+- `src/shared/infrastructure/` → adaptadores compartidos (notificaciones
+  WhatsApp/SMS en `notificacion_adapters.py`, base de datos en `database.py`,
+  Redis, Fernet, logging, settings)
+- `api/main.py` → cableado de puertos inter-módulo (factories)
+
+La carpeta `infra/terraform/` es un placeholder intencionado para Fase 2+
+(migración a Hetzner con IaC — ver 08 §3.3). Está vacía en Fase 0/1 porque
+Railway no requiere Terraform (08 §3.2). No es un gap.
+
 **Verificación de esta estructura:** `scripts/check_dip.py`
 ejecuta sobre `src/` y bloquea el pipeline si algún archivo
 en `{modulo}/domain/` importa desde `{modulo}/infrastructure/`
@@ -1087,3 +1097,4 @@ JSON completo de un endpoint específico al implementarlo
 | 0.9.0   | 2026-06 | Tramo 7 — criterios de verificación · observaciones activas · fuentes · historial                                                                                                                                                   | Documento completo — pendiente cierre formal                                                                                                                                                                                                       |
 | 1.0.0   | 2026-06 | Tramo de cierre formal — confirmación de Sant como validador. Historial interno sincronizado con frontmatter (previamente reflejaba 0.9.0)                                                                                          | Documento cerrado y aprobado — listo para verificación cruzada global                                                                                                                                                                              |
 | 1.0.1   | 2026-06 | PCT-CIERRE-008 — añadida §3.3.1 Identidad visual (tokens de color SANTI, sistema tipográfico Quicksand/Nunito Sans/Fira Code, regla de aplicación por superficie). Resuelve OBS-DS-003 — bloqueo de configuración Tailwind retirado | Cierra observación abierta desde sesión anterior. Habilita construcción real de componentes de frontend con tema definido. Aclaración de alcance: "SANTI" es nombre de marca/presentación únicamente — no afecta nomenclatura de dominio del DOC-3 |
+| 1.0.3   | 2026-06-21 | PCT formal HALLAZGO-INFRA-001/002 — árbol §2.3: `infrastructure/` raíz eliminada (residuo sin contenido real; responsabilidades cubiertas por `src/shared/infrastructure/` y `api/main.py`). Nota explícita añadida para `infra/terraform/` como placeholder Fase 2+ intencional (08 §3.3). Decisión de Sant. | Árbol §2.3 refleja la arquitectura real construida — elimina divergencia con el repositorio. |
