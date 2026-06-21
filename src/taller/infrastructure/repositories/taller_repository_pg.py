@@ -124,9 +124,11 @@ class TallerRepositoryPG:
             costo_mano_obra=ot.costo_mano_obra,
             monto_estimado=ot.monto_estimado,
         ))
+        await self._session.flush()  # OT debe existir antes de lista_repuestos_ot (FK)
         for item in ot.lista_repuestos:
             self._session.add(self._lista_item_to_model(item))
-        await self._session.flush()
+        if ot.lista_repuestos:
+            await self._session.flush()
         return ot
 
     async def obtener_ot(self, ot_id: str) -> Optional[OrdenTrabajo]:

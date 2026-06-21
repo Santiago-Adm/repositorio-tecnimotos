@@ -69,9 +69,11 @@ class PedidoRepositoryPG:
     async def guardar(self, pedido: Pedido) -> Pedido:
         model = self._pedido_to_model(pedido)
         self._session.add(model)
+        await self._session.flush()  # pedido debe existir antes de sus items (FK)
         for item in pedido.items:
             self._session.add(self._item_to_model(item))
-        await self._session.flush()
+        if pedido.items:
+            await self._session.flush()
         return pedido
 
     async def obtener_por_id(self, pedido_id: str) -> Optional[Pedido]:
@@ -285,6 +287,7 @@ class PedidoRepositoryPG:
             estado=lista.estado.value,
             ultima_actividad=lista.ultima_actividad,
         ))
+        await self._session.flush()  # lista debe existir antes de sus items (FK)
         for item in lista.items:
             self._session.add(ListaReservaProgresivaItemModel(
                 id=item.id,
@@ -294,7 +297,8 @@ class PedidoRepositoryPG:
                 cantidad=item.cantidad,
                 precio_referencia=item.precio_referencia,
             ))
-        await self._session.flush()
+        if lista.items:
+            await self._session.flush()
         return lista
 
     async def obtener_lista_reserva(self, lista_id: str) -> Optional[ListaReservaProg]:

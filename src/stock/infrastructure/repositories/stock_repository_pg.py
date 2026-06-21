@@ -11,6 +11,10 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Registra RepuestoModel en el metadata compartido (Base) antes de que
+# ReabastecimientoItemModel intente resolver FK repuesto_id → repuesto.id
+import src.catalogo.infrastructure.repositories.models.repuesto_model  # noqa: F401
+
 from src.stock.domain.models.stock import (
     EstadoReabastecimiento,
     MovimientoStock,
@@ -46,9 +50,11 @@ class StockRepositoryPG:
             umbral_minimo=stock.umbral_minimo,
         )
         self._session.add(model)
+        await self._session.flush()  # stock_repuesto debe existir antes de movimientos (FK)
         for mov in stock.movimientos:
             self._session.add(self._movimiento_to_model(mov))
-        await self._session.flush()
+        if stock.movimientos:
+            await self._session.flush()
         return stock
 
     async def obtener_por_repuesto_id(self, repuesto_id: str) -> Optional[StockRepuesto]:
@@ -120,9 +126,11 @@ class StockRepositoryPG:
             notas=reab.notas,
         )
         self._session.add(model)
+        await self._session.flush()  # reabastecimiento debe existir antes de sus items (FK)
         for item in reab.items:
             self._session.add(self._item_to_model(reab.id, item))
-        await self._session.flush()
+        if reab.items:
+            await self._session.flush()
         return reab
 
     async def obtener_reabastecimiento(self, reab_id: str) -> Optional[Reabastecimiento]:
