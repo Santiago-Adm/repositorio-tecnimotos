@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.0.2
 estado: cerrado
 bloque: E
 seccion: "03"
@@ -523,12 +523,22 @@ en §6.6 de este tramo.
 | EP-CAT-04 | PATCH | `/v1/repuestos/{codigo}/precio` | `SUPERADMIN` · `ADMINISTRADOR` | Publica `repuesto.precio_actualizado` |
 | EP-CAT-05 | DELETE | `/v1/repuestos/{codigo}` | `SUPERADMIN` · `ADMINISTRADOR` | Publica `repuesto.dado_de_baja` — baja lógica únicamente |
 | EP-CAT-06 | GET | `/v1/repuestos/{codigo}/historial-precio` | `SUPERADMIN` · `ADMINISTRADOR` | — |
+| EP-CAT-07 | POST | `/v1/catalogo/repuestos/consulta-lista` | `CLIENTE_DISTRITO` + roles internos | Retorna agrupado `disponibles`/`sin_stock`/`bajo_pedido` — sin efecto lateral de escritura |
 
 **Regla de separación crítica:** EP-CAT-01 y EP-CAT-02 NUNCA
 devuelven `precio_venta` bajo ninguna condición. Solo
 EP-CAT-02-B expone precio. El agente que implemente esto
 mal viola una decisión de seguridad explícita — referencia
 `08` §3.1 regla de separación de contratos.
+
+Nota (PCT-CONSTRUCCION-003, 2026-06-20): EP-CAT-07 formaliza
+el endpoint ya especificado en 02-definicion-funcional §5.3
+HU-S2-01 ("POST /catalogo/repuestos/consulta-lista"), construido
+durante la sesión de Fase B como necesidad práctica del módulo
+catalogo, sin EP-ID asignado en el cierre original de Fase A.
+Endpoint y comportamiento ya existían correctamente — este
+parche solo formaliza su entrada en el índice de 03 §6, llevando
+el conteo total de 54 a 55 endpoints.
 
 ### 6.3 Índice — módulo `pedidos`
 
