@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000)
 
-    database_url: str = Field(default="postgresql+asyncpg://tecnimotos:tecnimotos@localhost:5432/tecnimotos")
-    database_url_sync: str = Field(default="postgresql://tecnimotos:tecnimotos@localhost:5432/tecnimotos")
+    database_url: str = Field(default="postgresql+asyncpg://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos")
+    database_url_sync: str = Field(default="postgresql://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos")
 
     redis_url: str = Field(default="redis://localhost:6379/0")
     redis_params_db: str = Field(default="redis://localhost:6379/1")
