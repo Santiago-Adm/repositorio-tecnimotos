@@ -179,25 +179,234 @@ async def seed_taller_nivel1() -> None:
     print("  taller nivel 1: 1 mecanico, 2 vehiculos, 2 ordenes_trabajo sembrados (estados: ABIERTA) (en memoria)")
 
 
+async def seed_nivel2_postgres(database_url: str) -> None:
+    """
+    Seed nivel 2 — escribe datos reales a PostgreSQL via SQLAlchemy async.
+    Cubre todos los conteos de 04 §5.1 y estados de 04 §5.2.
+    FK order: usuario → cliente/mecanico → vehiculo → repuesto → stock_repuesto
+              → orden_trabajo → pedido → reabastecimiento
+    """
+    import hashlib
+    import os
+    import uuid as _uuid
+
+    from decimal import Decimal as D
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from src.catalogo.infrastructure.repositories.models.repuesto_model import RepuestoModel
+    from src.pedidos.infrastructure.repositories.models.pedido_models import (
+        ClienteModel, PedidoModel,
+    )
+    from src.shared.infrastructure.models.usuario_model import UsuarioModel
+    from src.stock.infrastructure.repositories.models.stock_model import (
+        ReabastecimientoModel, StockRepuestoModel,
+    )
+    from src.taller.infrastructure.repositories.models.taller_models import (
+        MecanicoModel, OrdenTrabajoModel, VehiculoModel,
+    )
+
+    def _phash(pw: str) -> str:
+        salt = os.urandom(16)
+        h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 100_000)
+        return salt.hex() + ":" + h.hex()
+
+    def _uid() -> str:
+        return str(_uuid.uuid4())
+
+    engine = create_async_engine(database_url, echo=False)
+    async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with async_session_factory() as session:
+        async with session.begin():
+
+            # ── 1. Usuarios ────────────────────────────────────────────────────
+            admin_id = _uid()
+            vendedor_id = _uid()
+            mec_user_id = _uid()
+            cli_ids: list[tuple[str, str]] = []  # (usuario_id, segmento)
+
+            usuarios = [
+                UsuarioModel(id=admin_id, email="admin@tecnimotos.test",
+                             password_hash=_phash("admin123"), rol="ADMINISTRADOR"),
+                UsuarioModel(id=vendedor_id, email="vendedor@tecnimotos.test",
+                             password_hash=_phash("vend456"), rol="VENDEDOR"),
+                UsuarioModel(id=mec_user_id, email="mecanico@tecnimotos.test",
+                             password_hash=_phash("mec789"), rol="MECANICO_MASTER"),
+            ]
+            # 4 CLIENTE_CONDUCTOR (S1), 3 CLIENTE_DISTRITO (S2), 3 CLIENTE_FLOTA_DUENO (S4)
+            seg_roles = [
+                ("CLIENTE_CONDUCTOR", "S1"), ("CLIENTE_CONDUCTOR", "S1"),
+                ("CLIENTE_CONDUCTOR", "S1"), ("CLIENTE_CONDUCTOR", "S1"),
+                ("CLIENTE_DISTRITO",  "S2"), ("CLIENTE_DISTRITO",  "S2"),
+                ("CLIENTE_DISTRITO",  "S2"),
+                ("CLIENTE_FLOTA_DUENO", "S4"), ("CLIENTE_FLOTA_DUENO", "S4"),
+                ("CLIENTE_FLOTA_DUENO", "S4"),
+            ]
+            for i, (rol, seg) in enumerate(seg_roles):
+                uid = _uid()
+                usuarios.append(UsuarioModel(
+                    id=uid,
+                    email=f"cliente{i:02d}@tecnimotos.test",
+                    password_hash=_phash("cli000"),
+                    rol=rol,
+                ))
+                cli_ids.append((uid, seg))
+
+            session.add_all(usuarios)
+            await session.flush()
+
+            # ── 2. Clientes (FK → usuario) ─────────────────────────────────────
+            clientes = []
+            cli_model_ids: list[str] = []
+            for uid, seg in cli_ids:
+                cid = _uid()
+                clientes.append(ClienteModel(id=cid, usuario_id=uid, segmento=seg))
+                cli_model_ids.append(cid)
+            session.add_all(clientes)
+            await session.flush()
+
+            # ── 3. Repuestos (25, activo True/False — no FK) ─────────────────
+            categorias = ["motor", "transmision", "frenos", "electrico", "otro"]
+            repuestos = []
+            rep_ids: list[str] = []
+            rep_codigos: list[str] = []
+            for i in range(25):
+                rid = _uid()
+                codigo = f"SEED-{i:03d}"
+                repuestos.append(RepuestoModel(
+                    id=rid,
+                    codigo=codigo,
+                    nombre=f"Repuesto seed nivel2 {i:02d}",
+                    universo="mototaxi" if i % 2 == 0 else "motolineal",
+                    modelo="Universal",
+                    año=2018 + (i % 7),
+                    categoria=categorias[i % len(categorias)],
+                    precio_venta=D(str(10 + i * 4)),
+                    activo=i < 20,   # 20 activos, 5 inactivos — §5.2 variedad
+                ))
+                rep_ids.append(rid)
+                rep_codigos.append(codigo)
+            session.add_all(repuestos)
+            await session.flush()
+
+            # ── 4. StockRepuesto (FK → repuesto) ─────────────────────────────
+            stocks = [
+                StockRepuestoModel(
+                    repuesto_id=rid,
+                    codigo=cod,
+                    cantidad_disponible=max(0, 50 - i * 2),
+                    umbral_minimo=5,
+                )
+                for i, (rid, cod) in enumerate(zip(rep_ids, rep_codigos))
+            ]
+            session.add_all(stocks)
+            await session.flush()
+
+            # ── 5. Vehículos (sin FK obligatoria) ────────────────────────────
+            vehiculos = []
+            veh_ids: list[str] = []
+            for i in range(8):
+                vid = _uid()
+                vehiculos.append(VehiculoModel(
+                    id=vid,
+                    universo="mototaxi" if i % 2 == 0 else "motolineal",
+                    modelo=f"Modelo Seed {i}",
+                    año=2017 + (i % 8),
+                ))
+                veh_ids.append(vid)
+            session.add_all(vehiculos)
+            await session.flush()
+
+            # ── 6. Mecánico (FK → usuario) ────────────────────────────────────
+            mec_id = _uid()
+            session.add(MecanicoModel(id=mec_id, usuario_id=mec_user_id, nivel="MASTER"))
+            await session.flush()
+
+            # ── 7. OrdenTrabajo — 8 OTs, todos los estados (§5.2) ────────────
+            estados_ot = [
+                ("ABIERTA", False, False),
+                ("LISTA_REPUESTOS", False, False),
+                ("EN_EJECUCION", False, False),
+                ("REVISION_FINAL", False, False),
+                ("CERRADA", True, True),
+                ("CANCELADA", False, False),
+                ("ABIERTA", False, False),
+                ("CERRADA", True, True),
+            ]
+            modalidades = ["preventivo", "correctivo", "diagnostico", "soldadura"]
+            for i, (estado, cli_aprobo, cobro_ok) in enumerate(estados_ot):
+                session.add(OrdenTrabajoModel(
+                    vehiculo_id=veh_ids[i % len(veh_ids)],
+                    mecanico_master_id=mec_id,
+                    modalidad=modalidades[i % len(modalidades)],
+                    urgencia=["alta", "media", "baja"][i % 3],
+                    estado=estado,
+                    cobro_confirmado=cobro_ok,
+                    cliente_aprobo_lista=cli_aprobo,
+                    monto_estimado=D(str(50 + i * 20)),
+                ))
+            await session.flush()
+
+            # ── 8. Pedidos — 15 con todos los estados (§5.2) ─────────────────
+            estados_ped = [
+                "BORRADOR", "CONFIRMADO", "EN_PREPARACION",
+                "DESPACHADO", "ENTREGADO", "INCIDENCIA", "CANCELADO",
+            ]
+            for i in range(15):
+                session.add(PedidoModel(
+                    cliente_id=cli_model_ids[i % len(cli_model_ids)],
+                    canal_origen="presencial" if i % 2 == 0 else "S2",
+                    origen_actor="VENDEDOR",
+                    estado=estados_ped[i % len(estados_ped)],
+                    monto_total=D(str(30 + i * 15)),
+                ))
+            await session.flush()
+
+            # ── 9. Reabastecimientos (5, sin FK) ─────────────────────────────
+            for i in range(5):
+                session.add(ReabastecimientoModel(
+                    proveedor=f"Proveedor Seed {i}",
+                    solicitado_por=vendedor_id,
+                    estado="SOLICITADO",
+                ))
+            await session.flush()
+
+    await engine.dispose()
+    print("  nivel 2 PostgreSQL: 13 usuarios · 10 clientes · 25 repuestos · 25 stocks"
+          " · 8 vehículos · 1 mecánico · 8 OTs · 15 pedidos · 5 reabastecimientos")
+
+
 async def run_seed(level: int, module: str, env: str) -> None:
     print(f"Seed nivel {level} — módulo {module} — entorno {env}")
-    if module == "catalogo" and level == 1:
-        await seed_catalogo_nivel1()
-    elif module == "pedidos" and level == 1:
-        await seed_pedidos_nivel1()
-    elif module == "stock" and level == 1:
-        await seed_stock_nivel1()
-    elif module == "taller" and level == 1:
-        await seed_taller_nivel1()
+    if level == 1:
+        if module == "catalogo":
+            await seed_catalogo_nivel1()
+        elif module == "pedidos":
+            await seed_pedidos_nivel1()
+        elif module == "stock":
+            await seed_stock_nivel1()
+        elif module == "taller":
+            await seed_taller_nivel1()
+        else:
+            print(f"  módulo {module} nivel 1: sin implementación específica, omitido")
+    elif level == 2:
+        import os
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "postgresql+asyncpg://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos",
+        )
+        await seed_nivel2_postgres(database_url)
     else:
-        print(f"  módulo {module} nivel {level}: aún no implementado")
+        print(f"  nivel {level}: no implementado")
     print("Seed completado sin errores.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed de datos de prueba")
     parser.add_argument("--level", type=int, required=True, choices=[1, 2])
-    parser.add_argument("--module", required=True)
+    parser.add_argument("--module", default="all",
+                        help="Módulo a sembrar (nivel 1) o 'all' para nivel 2")
     parser.add_argument("--env", required=True, choices=["test", "staging", "dev"])
     args = parser.parse_args()
     asyncio.run(run_seed(args.level, args.module, args.env))

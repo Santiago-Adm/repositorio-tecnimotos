@@ -1,6 +1,7 @@
 """
 Tests unitarios de scripts/verify_seed.py.
 Usa InMemorySeedQuery — sin BD real.
+verificar_seed() es async — todos los tests que la llaman son async.
 """
 import logging
 
@@ -11,9 +12,9 @@ from scripts.verify_seed import (
     ESTADOS_ORDEN_TRABAJO,
     ESTADOS_PEDIDO,
     ESTADOS_REPUESTO,
-    SEGMENTOS_CLIENTE,
     InMemorySeedQuery,
     ResultadoVerificacion,
+    SEGMENTOS_CLIENTE,
     verificar_seed,
 )
 
@@ -37,7 +38,8 @@ def _query_nivel2_completo() -> InMemorySeedQuery:
         "count_cliente": 10,
         "count_orden_trabajo": 8,
         "count_reabastecimiento": 5,
-        "values_repuesto_estado_disponibilidad": ESTADOS_REPUESTO,
+        # ESTADOS_REPUESTO ahora son valores de repuesto.activo ("true"/"false")
+        "values_repuesto_activo": ESTADOS_REPUESTO,
         "values_orden_trabajo_estado": ESTADOS_ORDEN_TRABAJO,
         "values_cliente_segmento": SEGMENTOS_CLIENTE,
         "values_pedido_estado": ESTADOS_PEDIDO,
@@ -52,7 +54,7 @@ def _query_nivel2_incompleto() -> InMemorySeedQuery:
         "count_cliente": 10,
         "count_orden_trabajo": 8,
         "count_reabastecimiento": 5,
-        "values_repuesto_estado_disponibilidad": ["disponible"],
+        "values_repuesto_activo": ["true"],      # falta "false"
         "values_orden_trabajo_estado": ["ABIERTA", "CERRADA"],
         "values_cliente_segmento": ["S1"],
         "values_pedido_estado": ["BORRADOR", "CONFIRMADO"],
@@ -62,12 +64,12 @@ def _query_nivel2_incompleto() -> InMemorySeedQuery:
 # ── Nivel 1 ───────────────────────────────────────────────────────────────────
 
 class TestNivel1:
-    def test_todos_pasan_con_conteos_minimos(self):
+    async def test_todos_pasan_con_conteos_minimos(self):
         query = _query_nivel1_completo()
-        resultados = verificar_seed(1, query)
+        resultados = await verificar_seed(1, query)
         assert all(r.pasa for r in resultados), [r for r in resultados if not r.pasa]
 
-    def test_falla_si_repuesto_insuficiente(self):
+    async def test_falla_si_repuesto_insuficiente(self):
         query = InMemorySeedQuery({
             "count_repuesto": 4,
             "count_pedido": 3,
@@ -75,11 +77,11 @@ class TestNivel1:
             "count_orden_trabajo": 2,
             "count_reabastecimiento": 1,
         })
-        resultados = verificar_seed(1, query)
+        resultados = await verificar_seed(1, query)
         fallo = next(r for r in resultados if r.tabla == "repuesto")
         assert not fallo.pasa
 
-    def test_falla_si_pedido_cero(self):
+    async def test_falla_si_pedido_cero(self):
         query = InMemorySeedQuery({
             "count_repuesto": 5,
             "count_pedido": 0,
@@ -87,14 +89,14 @@ class TestNivel1:
             "count_orden_trabajo": 2,
             "count_reabastecimiento": 1,
         })
-        resultados = verificar_seed(1, query)
+        resultados = await verificar_seed(1, query)
         fallo = next(r for r in resultados if r.tabla == "pedido")
         assert not fallo.pasa
 
-    def test_nivel1_no_verifica_contenido(self):
+    async def test_nivel1_no_verifica_contenido(self):
         """Nivel 1 solo verifica conteos — sin reglas de contenido de §5.2."""
         query = _query_nivel1_completo()
-        resultados = verificar_seed(1, query)
+        resultados = await verificar_seed(1, query)
         criterios = [r.criterio for r in resultados]
         assert all(c == "conteo_minimo" for c in criterios)
 
@@ -106,10 +108,10 @@ class TestNivel1:
         assert conteos["orden_trabajo"] == 2
         assert conteos["reabastecimiento"] == 1
 
-    def test_exactamente_en_el_limite_pasa(self):
+    async def test_exactamente_en_el_limite_pasa(self):
         """Exactamente el mínimo debe pasar (≥, no >)."""
         query = _query_nivel1_completo()
-        resultados = verificar_seed(1, query)
+        resultados = await verificar_seed(1, query)
         repuesto = next(r for r in resultados if r.tabla == "repuesto")
         assert repuesto.pasa
         assert repuesto.obtenido == 5
@@ -118,52 +120,54 @@ class TestNivel1:
 # ── Nivel 2 ───────────────────────────────────────────────────────────────────
 
 class TestNivel2:
-    def test_todos_pasan_con_seed_completo(self):
+    async def test_todos_pasan_con_seed_completo(self):
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         fallos = [r for r in resultados if not r.pasa]
         assert not fallos, fallos
 
-    def test_verifica_conteos_nivel2(self):
+    async def test_verifica_conteos_nivel2(self):
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         conteos = [r for r in resultados if r.criterio == "conteo_minimo"]
         assert len(conteos) == 5
         assert all(r.pasa for r in conteos)
 
-    def test_verifica_estados_repuesto(self):
+    async def test_verifica_activo_repuesto(self):
+        """§5.2: repuesto debe tener activos y no-activos (activo=true y activo=false)."""
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
-        estados_rep = [r for r in resultados if r.tabla == "repuesto" and "estado_disponibilidad" in r.criterio]
-        assert len(estados_rep) == len(ESTADOS_REPUESTO)
-        assert all(r.pasa for r in estados_rep)
+        resultados = await verificar_seed(2, query)
+        activos = [r for r in resultados if r.tabla == "repuesto" and "activo=" in r.criterio]
+        assert len(activos) == len(ESTADOS_REPUESTO)
+        assert all(r.pasa for r in activos)
 
-    def test_falla_si_falta_estado_repuesto(self):
+    async def test_falla_si_falta_activo_false(self):
+        """Si no hay repuestos inactivos, debe fallar el criterio activo=false."""
         query = _query_nivel2_incompleto()
-        resultados = verificar_seed(2, query)
-        estados_faltantes = [
+        resultados = await verificar_seed(2, query)
+        faltan = [
             r for r in resultados
-            if r.tabla == "repuesto" and "estado_disponibilidad" in r.criterio and not r.pasa
+            if r.tabla == "repuesto" and "activo=false" in r.criterio and not r.pasa
         ]
-        assert len(estados_faltantes) == 2  # no_disponible y bajo_pedido faltan
+        assert len(faltan) == 1
 
-    def test_verifica_los_6_estados_ot(self):
+    async def test_verifica_los_6_estados_ot(self):
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         estados_ot = [r for r in resultados if r.tabla == "orden_trabajo" and r.criterio != "conteo_minimo"]
         assert len(estados_ot) == len(ESTADOS_ORDEN_TRABAJO)
         assert all(r.pasa for r in estados_ot)
 
-    def test_verifica_los_3_segmentos_cliente(self):
+    async def test_verifica_los_3_segmentos_cliente(self):
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         segmentos = [r for r in resultados if r.tabla == "cliente" and r.criterio != "conteo_minimo"]
         assert len(segmentos) == len(SEGMENTOS_CLIENTE)
         assert all(r.pasa for r in segmentos)
 
-    def test_verifica_los_7_estados_pedido(self):
+    async def test_verifica_los_7_estados_pedido(self):
         query = _query_nivel2_completo()
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         estados_ped = [r for r in resultados if r.tabla == "pedido" and r.criterio != "conteo_minimo"]
         assert len(estados_ped) == len(ESTADOS_PEDIDO)
         assert all(r.pasa for r in estados_ped)
@@ -176,19 +180,19 @@ class TestNivel2:
         assert conteos["orden_trabajo"] == 8
         assert conteos["reabastecimiento"] == 5
 
-    def test_falla_si_conteo_insuficiente(self):
-        datos = {k: v for k, v in _query_nivel2_completo()._datos.items()}
+    async def test_falla_si_conteo_insuficiente(self):
+        datos = dict(_query_nivel2_completo()._datos)
         datos["count_repuesto"] = 24
         query = InMemorySeedQuery(datos)
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         conteo_rep = next(r for r in resultados if r.tabla == "repuesto" and r.criterio == "conteo_minimo")
         assert not conteo_rep.pasa
 
-    def test_falla_si_falta_segmento_s4(self):
-        datos = {k: v for k, v in _query_nivel2_completo()._datos.items()}
+    async def test_falla_si_falta_segmento_s4(self):
+        datos = dict(_query_nivel2_completo()._datos)
         datos["values_cliente_segmento"] = ["S1", "S2"]
         query = InMemorySeedQuery(datos)
-        resultados = verificar_seed(2, query)
+        resultados = await verificar_seed(2, query)
         s4 = next(r for r in resultados if r.tabla == "cliente" and "S4" in r.criterio)
         assert not s4.pasa
 
@@ -204,9 +208,9 @@ class TestNivel3:
         assert conteos["orden_trabajo"] == 20
         assert conteos["reabastecimiento"] == 10
 
-    def test_nivel3_tambien_verifica_contenido(self):
+    async def test_nivel3_tambien_verifica_contenido(self):
         """Nivel 3 incluye todas las reglas de §5.2."""
-        datos = {k: v for k, v in _query_nivel2_completo()._datos.items()}
+        datos = dict(_query_nivel2_completo()._datos)
         datos.update({
             "count_repuesto": 55,
             "count_pedido": 50,
@@ -215,7 +219,7 @@ class TestNivel3:
             "count_reabastecimiento": 10,
         })
         query = InMemorySeedQuery(datos)
-        resultados = verificar_seed(3, query)
+        resultados = await verificar_seed(3, query)
         fallos = [r for r in resultados if not r.pasa]
         assert not fallos, fallos
 
