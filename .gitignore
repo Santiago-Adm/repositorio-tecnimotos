@@ -35,3 +35,8 @@ dist/
 .pytest_cache/
 .coverage
 VERIFICACION_MANUAL.md
+
+# Documentación privada / personal
+.doc3/
+.dco3/
+
