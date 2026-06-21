@@ -25,6 +25,10 @@ def _get_parametros(request: Request):
 
 
 def _get_taller_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.taller.infrastructure.repositories.taller_repository_pg import TallerRepositoryPG
+        return TallerRepositoryPG(db)
     return request.app.state.taller_repo
 
 
