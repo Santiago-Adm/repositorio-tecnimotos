@@ -1,17 +1,17 @@
 ---
-version: 1.0.0
+version: 1.0.2
 estado: cerrado
 archivo: "09"
 titulo: Criterios de avance automático
 autor: Sant
-fecha: 2026-06
+fecha: 2026-06-20
 validador: Sant
 aprobado: true
 fuente_doc2_unica: 04 requerimientos · 09 especificaciones-tecnicas · 13 registro-ADRs
 fuentes_doc3_referenciadas: 07-criterios-seguridad-ejecutables v1.0.0 · 08-plan-operacion-ejecutable v1.0.0
 tramo_actual: 6 de 6 — criterio de actualización · ubicación · observaciones · fuentes · historial · cierre formal
-cambio: Tramo 6 — criterio de actualización del archivo · ubicación en repositorio (repositorio-tecnimotos, [dominio] como placeholder consistente con 07/08) · consolidación de observaciones · fuentes · historial completo · cierre formal v1.0.0
-impacto: Cierra la reestructuración completa de 09 — DOC-3 queda con 00,01,02,03,04,07,08,09 cerrados; 05,06 pendientes sin precondición de DOC-2
+cambio: PCT-CONSTRUCCION-001 — añadida §10.1 Regla de integridad numérica en 05-trazabilidad-ligera. Originada en sesión real de construcción: tres cifras distintas de "total de tests" (464→612→682) aparecieron sin verificación cruzada antes de estabilizarse en el número real. Formaliza que ningún número se escribe en 05 sin ejecutar el comando que lo produce en ese momento, y que discrepancias se reportan, nunca se sobrescriben en silencio
+impacto: Protección permanente contra el patrón de error detectado hoy — aplica desde ahora a toda sesión de construcción futura, no solo a esta
 ---
 # 09 — Criterios de avance automático
 ## Tecnimotos Santi · DOC-3 — Protocolo de construcción
@@ -571,7 +571,7 @@ para los 4 módulos
 gitleaks detect --source . en rama main  
 ☐ Criterio de verificación global de 07 §8.1 cumplido:  
 el agente puede verificar que cualquier endpoint de  
-los 54 indexados en 03-diseno-sistema §6 cumple los  
+los 55 indexados en 03-diseno-sistema §6 cumple los  
 10 controles OWASP sin consultar el DOC-2
 ```
 ### 9.3 Bloque operación — fuente: `08`, referenciado desde Tramo 3 §5.1
@@ -691,6 +691,58 @@ actualización requiere referencia a la sección del
 DOC-2 o del archivo DOC-3 que la origina.
 
 ---
+## 10.1 Regla de integridad numérica en 05-trazabilidad-ligera
+
+> Origen: detectado en sesión de construcción real — un mismo
+> documento de trazabilidad llegó a contener tres cifras
+> distintas de "total de tests" (464, 612, 682) antes de
+> estabilizarse en el número real verificado. Cada cifra
+> incorrecta fue copiada o inferida de un momento anterior sin
+> volver a ejecutar el comando que la produce.
+
+REGLA VINCULANTE — sin excepción:
+
+Ningún número cuantitativo (conteo de tests, porcentaje de
+cobertura, número de endpoints, número de eventos, número de
+suites) se escribe en 05-trazabilidad-ligera.md sin haber
+ejecutado el comando que lo produce EN ESE MISMO MOMENTO de
+la actualización — nunca por:
+  - copia de un número reportado en una sección anterior del
+    mismo documento
+  - inferencia aritmética sobre números no verificados
+    individualmente ("si antes era X y agregué Y, debe ser
+    X+Y" sin confirmar X+Y con el comando real)
+  - memoria de una sesión anterior, propia o de otra
+    instancia del agente
+
+Antes de escribir cualquier número en 05, el agente ejecuta el
+comando crudo correspondiente (ej. `pytest tests/ -v --co -q`
+para conteo total, nunca un subconjunto extrapolado) y usa
+EXACTAMENTE ese resultado — nunca un resumen propio del
+resultado, nunca un número "coherente con la narrativa" del
+reporte.
+
+Si al actualizar 05 el agente nota que un número anterior en
+el mismo documento no coincide con lo que el comando real
+produce ahora, NO lo sobrescribe en silencio — lo reporta
+explícitamente en el historial de actualizaciones, con el
+número anterior, el número correcto, y el comando exacto
+usado para verificarlo. Mismo principio R7 ya vigente en el
+gobierno del proyecto: "inconsistencia detectada se reporta,
+nunca se corrige por asunción silenciosa" — aplicado ahora a
+datos cuantitativos de construcción, no solo a contenido
+documental.
+
+Verificación cruzada obligatoria antes de cerrar cualquier
+módulo: la suma de los conteos individuales por módulo en la
+tabla de "Estado de módulos" de 05 NO necesita coincidir con
+el "total actual del sistema" si hubo construcción posterior
+al cierre de algún módulo (suites LSP, scripts, etc.) — pero
+si no coinciden, 05 debe declarar explícitamente POR QUÉ no
+coinciden (qué se agregó después y en qué commit), nunca
+dejar la discrepancia sin explicar.
+
+---
 
 ## 11. Ubicación en el repositorio
 ```
@@ -755,6 +807,8 @@ existencia:**
 | 0.4.0 | 2026-06 | Tramo 4 — no regresión ampliado · excepción de corrección automática para criterios legales/CC · formato de reporte ampliado con TIPO y ORIGEN | Mecánica de ejecución coherente con los nuevos tipos de criterio |
 | 0.5.0 | 2026-06 | Tramo 5 — criterio de cierre del sistema completo integrando los 3 bloques · CT-11-01/02 formalizados como bloqueo duro | Resuelve la pregunta de diseño pendiente sobre scripts faltantes |
 | 1.0.0 | 2026-06 | Tramo 6 — criterio de actualización · ubicación con placeholder `[dominio]` consistente · consolidación · fuentes · historial · cierre formal | Documento completo — 6 de 6 tramos cerrados, reestructuración total completada |
+| 1.0.1 | 2026-06 | PCT-CONSTRUCCION-001 — añadida §10.1 Regla de integridad numérica en 05-trazabilidad-ligera. Originada en sesión real de construcción: tres cifras distintas de "total de tests" (464→612→682) aparecieron sin verificación cruzada antes de estabilizarse en el número real. Formaliza que ningún número se escribe en 05 sin ejecutar el comando que lo produce en ese momento, y que discrepancias se reportan, nunca se sobrescriben en silencio| Protección permanente contra el patrón de error detectado hoy — aplica desde ahora a toda sesión de construcción futura, no solo a esta |
+| 1.0.2 | 2026-06 | PCT-CONSTRUCCION-003 — conteo de endpoints actualizado de 54 a 55 en §9.2 (línea "los 54 indexados") tras formalización de EP-CAT-07 en 03 §6.2 | Mantiene coherencia con 07 v1.0.1 y 03 v1.0.x |
 
 ---
 

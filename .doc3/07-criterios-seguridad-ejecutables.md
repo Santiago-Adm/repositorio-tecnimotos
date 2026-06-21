@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.0.1
 estado: cerrado
 archivo: "07"
 titulo: Criterios de seguridad ejecutables
@@ -10,8 +10,8 @@ aprobado: true
 fuente_doc2_unica: "10 seguridad-formal v1.0.0"
 tramo_actual: 6 de 6 — cierre · observaciones · fuentes · historial
 alimenta: ["09-criterios-avance-automatico"]
-cambio: "Tramo 6 — criterio de verificación global · consolidación de observaciones activas · fuentes · historial de versiones · cierre formal v1.0.0"
-impacto: "Archivo completo y disponible para que 09-criterios-avance-automatico referencie sus criterios de seguridad sin duplicarlos, según renumeración aplicada en parche 1.2 del mapa de ejecución"
+cambio: "PCT-CONSTRUCCION-003 — conteo de endpoints actualizado de 54 a 55 tras formalización de EP-CAT-07 en 03 §6.2"
+impacto: "55/55 endpoints con riesgo OWASP asignado — inventario actualizado"
 ---
 
 # 07 — Criterios de seguridad ejecutables
@@ -188,7 +188,7 @@ reemplazar el adaptador de autenticación.
 > Fuente: `10 seguridad-formal` §3.1 a §3.4.
 > El agente no reproduce aquí la matriz completa de
 > permisos por endpoint — esa matriz vive en `10` §3.2
-> y referencia los 54 endpoints indexados en
+> y referencia los 55 endpoints indexados en
 > `03-diseno-sistema` §6.2 a §6.6. Aquí se declara el
 > patrón de verificación y el contenido que sí es nuevo
 > para este archivo: las 10 políticas ABAC como
@@ -223,10 +223,10 @@ de cliente = 11 valores válidos para el campo `rol`/`sub_rol`.
 El agente NO reproduce aquí la tabla de permisos por
 endpoint — consulta `10 seguridad-formal` §3.2 para el
 detalle exacto de qué rol accede a qué operación de los
-54 endpoints declarados en `03-diseno-sistema` §6.
+55 endpoints declarados en `03-diseno-sistema` §6.
 
 Lo que sí declara este archivo es el **patrón de
-verificación** que aplica a los 54 endpoints sin
+verificación** que aplica a los 55 endpoints sin
 excepción:
 ```
 PARA CADA endpoint nuevo o modificado:
@@ -392,7 +392,7 @@ Referencia `10` §3.4 tabla de verificación.
 ## 4. Checklist OWASP API Top 10 — por endpoint
 
 > Fuente: `10 seguridad-formal` §4 y §4.1.
-> Aplica sobre los **54 endpoints** indexados en
+> Aplica sobre los **55 endpoints** indexados en
 > `03-diseno-sistema` §6.2 a §6.6 — no sobre 40. Ver
 > §4.0 de este tramo para la corrección formal de cifra.
 > El agente NO reproduce aquí el índice completo de
@@ -409,14 +409,14 @@ endpoints" en su frontmatter (CT-08-07), §1.3, intro de
 §4, API9 y CT-08-07 de cierre. `03-diseno-sistema` v1.0.0
 —construido después, con `08 contratos-interfaces` ya
 evolucionado tras su sesión 0.9.1— indexó el conteo real
-y vigente: **54 endpoints** (7 catálogo + 17 pedidos +
+y vigente: **55 endpoints** (8 catálogo + 17 pedidos +
 8 stock + 12 taller + 5 auth + 5 admin).
 
 Verificación realizada para este tramo: cada ID de
 "endpoint de mayor riesgo" citado en `10` §4 (API1 a
-API10) existe sin alteración en el índice de 54 de `03`
+API10) existe sin alteración en el índice de 55 de `03`
 §6. No hay endpoint huérfano de asignación de riesgo —
-la diferencia de 14 endpoints entre 40 y 54 corresponde
+la diferencia de 15 endpoints entre 40 y 55 corresponde
 a IDs que `10` ya incluía implícitamente en su análisis
 de riesgo por grupo (ej. el bloque completo EP-PED-01
 a 17, EP-ADM-01 a 05), no a endpoints nuevos sin
@@ -430,11 +430,11 @@ frontmatter de `10` no actualizó la suma total. No es
 un endpoint que "apareció después" para efectos de
 seguridad — solo para efectos de conteo agregado.
 
-**Resultado: 54 de 54 endpoints con riesgo OWASP
+**Resultado: 55 de 55 endpoints con riesgo OWASP
 asignado. OBS-EP-002 cerrada. ✅**
 Acción recomendada — no bloqueante: parche quirúrgico
 de frontmatter sobre `10 seguridad-formal` para corregir
-"40" → "54" en los 5 puntos donde aparece la cifra.
+"40" → "55" en los 5 puntos donde aparece la cifra.
 
 ---
 
@@ -551,9 +551,9 @@ contrato formal · un solo prefijo /v1/ ·
 EP-AUTH-05 único endpoint público sin  
 exposición de datos de negocio  
 ENDPOINTS: EP-AUTH-05 (único público) · cualquier  
-endpoint no declarado en el índice de 54  
+endpoint no declarado en el índice de 55  
 VERIFICAR: el conjunto de endpoints activos en el  
-servidor coincide EXACTAMENTE con los 54  
+servidor coincide EXACTAMENTE con los 55  
 declarados en 03-diseno-sistema §6 — no 40 —  
 ningún endpoint responde fuera de /v1/ ·  
 EP-AUTH-05 no expone datos internos bajo  
@@ -562,7 +562,7 @@ ninguna condición
 **Nota de actualización respecto a `10`:** el criterio
 original en `10` decía "coincide exactamente con los 40
 declarados en `08`". El criterio vigente y corregido es
-54 — ver §4.0 de este tramo.
+55 — ver §4.0 de este tramo.
 
 ### 4.10 API10:2023 — Unsafe Consumption of APIs
 ```
@@ -581,7 +581,7 @@ declarado
 
 ### 4.11 Resumen de cobertura — corregido
 
-| Riesgo | Control principal | Endpoints afectados (de 54) | Estado |
+| Riesgo | Control principal | Endpoints afectados (de 55) | Estado |
 |---|---|---|---|
 | API1 | ABAC-01 a ABAC-10 | 5 de mayor riesgo identificado | ✅ |
 | API2 | JWT + MFA + rate limit + replay detection | 3 (auth) | ✅ |
@@ -590,13 +590,13 @@ declarado
 | API5 | RBAC en middleware | 6 de mayor riesgo identificado | ✅ |
 | API6 | Rate limiting escritura + estado previo | 4 de mayor riesgo identificado | ✅ |
 | API7 | URLs fijas en entorno | 0 directo — adaptadores | ✅ |
-| API8 | CORS + headers + sin debug | 54 — transversal | ✅ |
-| API9 | Inventario cerrado en 54, no 40 | 54 — transversal | ✅ |
+| API8 | CORS + headers + sin debug | 55 — transversal | ✅ |
+| API9 | Inventario cerrado en 55, no 40 | 55 — transversal | ✅ |
 | API10 | Pydantic + timeout + excepciones tipadas | 0 directo — adaptadores | ✅ |
 
 **Criterio de verificación del archivo completo cumplido
 para este tramo:** el agente puede tomar cualquiera de
-los 54 endpoints de `03-diseno-sistema` §6, identificar
+los 55 endpoints de `03-diseno-sistema` §6, identificar
 su grupo de riesgo OWASP por los endpoints de mayor
 riesgo listados arriba o por su control transversal
 (API8/API9), y aplicar el control correspondiente sin
@@ -1101,14 +1101,14 @@ los parámetros exactos de Tramo 1 §2.1, sin abrir 10
 SUPERADMIN/ADMINISTRADOR vía consulta de audit trail  
 (Tramo 1 §2.4 + Tramo 5 §7.1 categoría Autenticación)  
 □ El agente puede aplicar el patrón de verificación RBAC  
-sobre cualquiera de los 54 endpoints de 03-diseno-sistema  
+sobre cualquiera de los 55 endpoints de 03-diseno-sistema  
 §6, sin reproducir la matriz de 10 §3.2 (Tramo 2 §3.2)  
 □ El agente puede ejecutar un test por cada una de las  
 10 políticas ABAC con su respuesta diferenciada correcta  
 404 vs 403 (Tramo 2 §3.3 — incluyendo corrección  
 aplicada sobre ABAC-06 vía parche de sesión)  
 □ El agente puede tomar cualquier endpoint nuevo de los  
-54 indexados, identificar su grupo de riesgo OWASP y  
+55 indexados, identificar su grupo de riesgo OWASP y  
 aplicar el control correspondiente sin abrir 10  
 (Tramo 3 §4.1 a §4.10 — OBS-EP-002 resuelta)  
 □ El agente puede validar las 10 variables de entorno  
@@ -1138,7 +1138,7 @@ Las únicas referencias hacia otros archivos del DOC-3
 son deliberadas y por diseño, para evitar duplicación
 según P2:
 ```
-03-diseno-sistema §6 → índice completo de 54 endpoints  
+03-diseno-sistema §6 → índice completo de 55 endpoints  
 (Tramo 2 §3.2 · Tramo 3 completo)  
 03-diseno-sistema §7 → índice completo de 24 eventos  
 (no consultado directamente en  
@@ -1162,7 +1162,7 @@ y Tramo 5 §6.4)
 
 | ID | Observación | Origen | Estado |
 |---|---|---|---|
-| OBS-EP-002 | `10-seguridad-formal` frontmatter y 5 menciones internas declaran "40 endpoints"; cobertura real verificada uno a uno contra `03-diseno-sistema` §6 confirma 54, sin endpoint huérfano de riesgo OWASP | Tramo 3 §4.0 | ✅ Resuelta — parche de frontmatter sobre `10` recomendado, no bloqueante |
+| OBS-EP-002 | `10-seguridad-formal` frontmatter y 5 menciones internas declaran "40 endpoints"; cobertura real verificada uno a uno contra `03-diseno-sistema` §6 confirma 55 (actualizado con EP-CAT-07 vía PCT-CONSTRUCCION-003), sin endpoint huérfano de riesgo OWASP | Tramo 3 §4.0 | ✅ Resuelta — parche de frontmatter sobre `10` recomendado, no bloqueante |
 | OBS-EP-003 | `10-seguridad-formal` §3.3 ABAC-06 no declaraba el nombre del campo `motivo_validacion` ni la regla precisa de transición de estado para `VENDEDOR` vs `ADMINISTRADOR`/`SUPERADMIN` en EP-PED-15 | Tramo 2 §3.3, ampliada con fragmento de `08 contratos-interfaces` | ✅ Resuelta y ampliada — `08` adoptado como fuente más específica, parche aplicado sobre Tramo 2 |
 | OBS-EP-004 | `10-seguridad-formal` §7.1 categoría Seguridad lista "desbloqueo manual" de IP como evento auditable, sin endpoint ni mecanismo declarado en `10` ni `03-diseno-sistema` para ejecutarlo | Tramo 5 §7.1 | 🔵 Abierta — no bloqueante, pertenece a `08-plan-operacion-ejecutable` o a un endpoint administrativo futuro |
 
@@ -1175,7 +1175,7 @@ y Tramo 5 §6.4)
 | Documento | Versión | Secciones consultadas |
 |---|---|---|
 | `10 seguridad-formal` | v1.0.0 | §1 a §10 completas — fuente única declarada de este archivo |
-| `03-diseno-sistema` | v1.0.0 | §6 índice de 54 endpoints · §7 índice de 24 eventos · §5.7 campos cifrados Fernet · §5.3 nota de permisos de escritura · §10 rate limiting · §2.2 check_dip.py |
+| `03-diseno-sistema` | v1.0.0 | §6 índice de 55 endpoints · §7 índice de 24 eventos · §5.7 campos cifrados Fernet · §5.3 nota de permisos de escritura · §10 rate limiting · §2.2 check_dip.py |
 | `08 contratos-interfaces` | v1.0.0 (fragmento EP-PED-15) | Schema completo de request body, regla de estado inicial, códigos de error — usado para resolver OBS-EP-003 |
 | `mapa-de-ejecucion.md` (DOC-3) | v1.2 | Criterio de cierre declarado para archivo `07` |
 
@@ -1193,8 +1193,9 @@ y Tramo 5 §6.4)
 | 0.4.0      | 2026-06                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Tramo 4 — clasificación de secretos · validación de arranque · calendario de rotación · doble barrera Gitleaks                                           | Cierra criterio transversal "Secrets scan sin hallazgos" de `09`                     |
 | 0.5.0      | 2026-06                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Tramo 5 — Ley 29733 ejecutable (datos personales, consentimiento, ARCO, registro ANPDP) · audit trail 8 categorías · inmutabilidad · retención · alertas | OBS-EP-004 generada — desbloqueo manual de IP sin mecanismo declarado                |
 | 1.0.0      | 2026-06                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Tramo 6 — criterio de verificación global · consolidación de observaciones · fuentes · historial · cierre formal                                         | Documento completo — 6 de 6 tramos cerrados sin observaciones bloqueantes pendientes |
+| 1.0.1      | 2026-06 | PCT-CONSTRUCCION-003 — conteo de endpoints actualizado de 54 a 55 tras formalización de EP-CAT-07 en 03 §6.2 | 55/55 endpoints con riesgo OWASP asignado — inventario actualizado |
 
 
 ---
 
-**Resultado de cierre: `07-criterios-seguridad-ejecutables.md` v1.0.0 — 6 de 6 tramos completados. 3 observaciones generadas, 2 resueltas, 1 abierta no bloqueante. Sin CT pendientes de esta construcción.**
+**Resultado de cierre: `07-criterios-seguridad-ejecutables.md` v1.0.1 — 6 de 6 tramos completados. 3 observaciones generadas, 2 resueltas, 1 abierta no bloqueante. Sin CT pendientes de esta construcción.**
