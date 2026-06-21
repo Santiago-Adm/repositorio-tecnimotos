@@ -7,7 +7,11 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from api.auth import (
+    ADMIN_ROLES, INTERNO_ROLES, MECANICO_JUNIOR_ROLES,
+    MECANICO_ROLES, TAL_VENDEDOR_ROLES, require_roles,
+)
 from pydantic import BaseModel, Field
 
 from api.dependencies import error_response, get_request_id, success_response
@@ -138,7 +142,10 @@ class ConfirmarAdicionalRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="EP-TAL-01: Abrir orden de trabajo",
 )
-async def abrir_ot(request: Request, body: AbrirOTRequest) -> dict[str, Any]:
+async def abrir_ot(
+    request: Request, body: AbrirOTRequest,
+    _auth: dict = Depends(require_roles(*INTERNO_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = AbrirOrdenTrabajoUseCase(repo, pub)
@@ -166,7 +173,8 @@ async def abrir_ot(request: Request, body: AbrirOTRequest) -> dict[str, Any]:
     summary="EP-TAL-02: Agregar repuesto a orden de trabajo",
 )
 async def agregar_repuesto(
-    request: Request, ot_id: str, body: AgregarRepuestoRequest
+    request: Request, ot_id: str, body: AgregarRepuestoRequest,
+    _auth: dict = Depends(require_roles(*MECANICO_JUNIOR_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     catalogo = _get_catalogo(request)
@@ -196,7 +204,10 @@ async def agregar_repuesto(
     "/ordenes-trabajo/{ot_id}/aprobar-lista",
     summary="EP-TAL-03: Aprobar lista → EN_EJECUCION",
 )
-async def aprobar_lista(request: Request, ot_id: str) -> dict[str, Any]:
+async def aprobar_lista(
+    request: Request, ot_id: str,
+    _auth: dict = Depends(require_roles(*TAL_VENDEDOR_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = AprobarListaUseCase(repo, pub)
@@ -223,7 +234,8 @@ async def aprobar_lista(request: Request, ot_id: str) -> dict[str, Any]:
     summary="EP-TAL-04: Cliente confirma costo adicional manual",
 )
 async def confirmar_adicional(
-    request: Request, ot_id: str, body: ConfirmarAdicionalRequest
+    request: Request, ot_id: str, body: ConfirmarAdicionalRequest,
+    _auth: dict = Depends(require_roles(*TAL_VENDEDOR_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ConfirmarAdicionalUseCase(repo)
@@ -251,7 +263,8 @@ async def confirmar_adicional(
     summary="EP-TAL-05: Autorizar visibilidad de precio al cliente",
 )
 async def autorizar_precio(
-    request: Request, ot_id: str, body: AutorizarPrecioRequest
+    request: Request, ot_id: str, body: AutorizarPrecioRequest,
+    _auth: dict = Depends(require_roles(*MECANICO_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = AutorizarPrecioUseCase(repo)
@@ -277,7 +290,8 @@ async def autorizar_precio(
     summary="EP-TAL-06: Declarar revisión final → REVISION_FINAL",
 )
 async def revision_final(
-    request: Request, ot_id: str, body: RevisionFinalRequest
+    request: Request, ot_id: str, body: RevisionFinalRequest,
+    _auth: dict = Depends(require_roles(*MECANICO_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -306,7 +320,8 @@ async def revision_final(
     summary="EP-TAL-07: Registrar cobro parcial con excepción 80%",
 )
 async def cobro_parcial(
-    request: Request, ot_id: str, body: CobroParcialRequest
+    request: Request, ot_id: str, body: CobroParcialRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = CobroParcialUseCase(repo)
@@ -337,7 +352,10 @@ async def cobro_parcial(
     "/ordenes-trabajo/{ot_id}/cerrar",
     summary="EP-TAL-08: Cerrar orden de trabajo",
 )
-async def cerrar_ot(request: Request, ot_id: str) -> dict[str, Any]:
+async def cerrar_ot(
+    request: Request, ot_id: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN", "MECANICO_MASTER")),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = CerrarOrdenTrabajoUseCase(repo, pub)
@@ -369,7 +387,8 @@ async def cerrar_ot(request: Request, ot_id: str) -> dict[str, Any]:
     summary="EP-TAL-09: Cancelar orden de trabajo",
 )
 async def cancelar_ot(
-    request: Request, ot_id: str, body: CancelarOTRequest
+    request: Request, ot_id: str, body: CancelarOTRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -397,7 +416,10 @@ async def cancelar_ot(
     "/ordenes-trabajo/{ot_id}/liberar-vehiculo",
     summary="EP-TAL-10: Liberar vehículo tras prueba de ruta",
 )
-async def liberar_vehiculo(request: Request, ot_id: str) -> dict[str, Any]:
+async def liberar_vehiculo(
+    request: Request, ot_id: str,
+    _auth: dict = Depends(require_roles(*MECANICO_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = LiberarVehiculoUseCase(repo, pub)

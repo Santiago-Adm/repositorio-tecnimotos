@@ -11,9 +11,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from api.dependencies import error_response, success_response
+from api.routes import admin as admin_router
+from api.routes import auth_routes as auth_router
 from api.routes import catalogo as catalogo_router
-from api.routes import stock as stock_router
 from api.routes import pedidos as pedidos_router
+from api.routes import stock as stock_router
 from api.routes import taller as taller_router
 from src.catalogo.infrastructure.repositories.repuesto_repository_inmemory import (
     InMemoryRepuestoRepository,
@@ -34,8 +36,10 @@ from src.taller.infrastructure.repositories.taller_repository_inmemory import (
 from src.taller.infrastructure.adapters.catalogo_taller_adapter import (
     InMemoryCatalogoTallerAdapter,
 )
+from api.auth_stores import InMemorySessionStore, InMemoryUserStore
 from src.shared.events.event_bus import InMemoryEventBus
 from src.shared.infrastructure.logging import configure_logging, request_id_var
+from src.shared.infrastructure.parametros_adapters import InMemoryParametrosService
 from src.shared.infrastructure.settings import get_settings
 
 settings = get_settings()
@@ -76,8 +80,26 @@ def create_app() -> FastAPI:
     app.state.taller_repo = InMemoryTallerRepository()
     app.state.catalogo_taller_adapter = InMemoryCatalogoTallerAdapter()
     app.state.event_bus = InMemoryEventBus()
+    app.state.user_store = InMemoryUserStore()
+    app.state.session_store = InMemorySessionStore()
+    app.state.parametros_service = InMemoryParametrosService()
+
+    # Claves JWT RS256 — None si los archivos no existen (tests usan app.state directo)
+    try:
+        with open(settings.jwt_public_key_path) as _f:
+            app.state.jwt_public_key = _f.read()
+    except (FileNotFoundError, OSError):
+        app.state.jwt_public_key = None
+        logger.warning("jwt_public_key_path '%s' no encontrado — auth desactivado", settings.jwt_public_key_path)
+    try:
+        with open(settings.jwt_private_key_path) as _f:
+            app.state.jwt_private_key = _f.read()
+    except (FileNotFoundError, OSError):
+        app.state.jwt_private_key = None
 
     # Routers
+    app.include_router(auth_router.router)
+    app.include_router(admin_router.router)
     app.include_router(catalogo_router.router)
     app.include_router(stock_router.router)
     app.include_router(pedidos_router.router)

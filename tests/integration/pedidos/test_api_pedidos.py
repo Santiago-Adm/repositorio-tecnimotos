@@ -3,6 +3,7 @@ Tests de integración — API de pedidos (EP-PED-01 a EP-PED-17).
 """
 import pytest
 from decimal import Decimal
+from tests.integration.conftest import make_test_token
 
 
 class TestEPPED01CrearPedido:
@@ -304,22 +305,33 @@ class TestEPPED10y11ConfirmarRecepcionIncidencia:
 
 class TestEPPED12Notificacion:
     async def test_solicitar_notificacion(self, pedidos_client):
-        response = await pedidos_client.post("/v1/notificaciones/repuesto-disponible")
+        # EP-PED-12: solo CLIENTE_* — override del token ADMIN por defecto
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_CONDUCTOR")
+        response = await pedidos_client.post(
+            "/v1/notificaciones/repuesto-disponible",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert response.status_code == 200
 
 
 class TestEPPED13y14ListaReserva:
+    # EP-PED-13 y EP-PED-14: solo CLIENTE_DISTRITO — override del token ADMIN por defecto
+
     async def test_crear_lista_vacia(self, pedidos_client):
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_DISTRITO")
         response = await pedidos_client.post(
             "/v1/lista-reserva-progresiva",
+            headers={"Authorization": f"Bearer {token}"},
             json={"cliente_id": "cli-001", "items": []},
         )
         assert response.status_code == 201
         assert response.json()["data"]["estado"] == "BORRADOR"
 
     async def test_formalizar_lista(self, pedidos_client):
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_DISTRITO")
         crear = await pedidos_client.post(
             "/v1/lista-reserva-progresiva",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "cliente_id": "cli-001",
                 "items": [
@@ -328,18 +340,30 @@ class TestEPPED13y14ListaReserva:
             },
         )
         lista_id = crear.json()["data"]["lista_id"]
-        response = await pedidos_client.post(f"/v1/lista-reserva-progresiva/{lista_id}/formalizar")
+        response = await pedidos_client.post(
+            f"/v1/lista-reserva-progresiva/{lista_id}/formalizar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert response.status_code == 200
 
     async def test_formalizar_inexistente(self, pedidos_client):
-        response = await pedidos_client.post("/v1/lista-reserva-progresiva/id-99999/formalizar")
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_DISTRITO")
+        response = await pedidos_client.post(
+            "/v1/lista-reserva-progresiva/id-99999/formalizar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert response.status_code == 404
 
     async def test_formalizar_lista_vacia_falla(self, pedidos_client):
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_DISTRITO")
         crear = await pedidos_client.post(
             "/v1/lista-reserva-progresiva",
+            headers={"Authorization": f"Bearer {token}"},
             json={"cliente_id": "cli-001", "items": []},
         )
         lista_id = crear.json()["data"]["lista_id"]
-        response = await pedidos_client.post(f"/v1/lista-reserva-progresiva/{lista_id}/formalizar")
+        response = await pedidos_client.post(
+            f"/v1/lista-reserva-progresiva/{lista_id}/formalizar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert response.status_code == 422

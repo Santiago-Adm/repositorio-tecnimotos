@@ -15,6 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from api.auth import require_roles
 from api.dependencies import error_response, get_request_id, success_response
 from src.catalogo.application.use_cases.actualizar_precio import (
     ActualizarPrecioCommand,
@@ -250,6 +251,7 @@ async def consultar_precio(
 async def crear_repuesto(
     request: Request,
     body: CrearRepuestoRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     """Crea repuesto nuevo. Solo ADMINISTRADOR y SUPERADMIN."""
     repo = _get_repo(request)
@@ -300,6 +302,7 @@ async def actualizar_precio(
     request: Request,
     codigo: str,
     body: ActualizarPrecioRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     """Actualiza precio. Solo ADMINISTRADOR y SUPERADMIN."""
     repo = _get_repo(request)
@@ -352,6 +355,7 @@ async def dar_de_baja_repuesto(
     request: Request,
     codigo: str,
     body: DarDeBajaRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     """Baja lógica — nunca eliminación física. Solo ADMINISTRADOR y SUPERADMIN."""
     repo = _get_repo(request)
@@ -395,7 +399,11 @@ async def dar_de_baja_repuesto(
     "/repuestos/{codigo}/historial-precio",
     summary="EP-CAT-06: Historial de precio",
 )
-async def historial_precio(request: Request, codigo: str) -> dict[str, Any]:
+async def historial_precio(
+    request: Request,
+    codigo: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
     """Historial de cambios de precio. Solo ADMINISTRADOR y SUPERADMIN."""
     repo = _get_repo(request)
     use_case = ObtenerHistorialPrecioUseCase(repo)
