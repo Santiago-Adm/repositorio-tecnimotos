@@ -1,5 +1,5 @@
 ---
-version: 1.4.0
+version: 1.5.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: listo_para_predeploy
@@ -13,14 +13,24 @@ timestamp_ultima_actualizacion: 2026-06-21T01:30:00Z
 
 ## Estado del sistema
 
-**Construcción completa. Sistema listo para checklist pre-deploy de 08-plan-operacion-ejecutable.**
+**CT-PERSISTENCIA-001 — Reversión parcial de cierre (2026-06-21):**
+Verificación funcional local confirmó que `stock`, `pedidos` y `taller` no tienen repositorio
+PostgreSQL implementado. Solo `catalogo` tiene `RepuestoRepositoryPG`. Los tres módulos afectados
+pasan de `cerrado_confirmado` a `cierre_parcial`. Compuerta humana #6 ejecutada por Sant.
 
-Declaración emitida el 2026-06-20 según 09 §9.5 — luego de confirmar que §9.1, §9.2 y §9.3 están
-en verde y §9.4 no tiene bloqueos activos (CT-11-01 y CT-11-02 resueltos).
+Comando que confirmó el hallazgo:
+```
+grep -rn "class.*Repository" src/catalogo/infrastructure/  # InMemory + PG ✓
+grep -rn "class.*Repository" src/stock/infrastructure/     # solo InMemory ✗
+grep -rn "class.*Repository" src/pedidos/infrastructure/   # solo InMemory ✗
+grep -rn "class.*Repository" src/taller/infrastructure/    # solo InMemory ✗
+```
 
-**Próximo paso:** ejecutar checklist pre-deploy completo de 08 §8.1 — bloque LEGAL (registro ANPDP)
-y bloque VALIDACION_FINAL (4 sesiones de Elena en tecnimotos) aún no ejecutados — fuera del alcance
-de esta construcción.
+**Estado en construcción.** Adaptadores PostgreSQL para stock/pedidos/taller pendientes.
+Declaración 09 §9.5 suspendida hasta completar persistencia real en los 4 módulos.
+
+**Próximo paso:** construir StockRepositoryPG · PedidoRepositoryPG · TallerRepositoryPG,
+verificar con restart + persistencia real (endpoint → restart → dato sigue ahí).
 
 ---
 
@@ -28,10 +38,10 @@ de esta construcción.
 
 | Módulo   | Estado              | Criterios 09       | Tests | Commit  |
 |----------|---------------------|--------------------|-------|---------|
-| catalogo | cerrado_confirmado  | 09 §3.1 — 9/10 ✓  | 102   | e41e247 |
-| stock    | cerrado_confirmado  | 09 §3.3 — 10/12 ✓ | 178   | fb36c23 |
-| pedidos  | cerrado_confirmado  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 |
-| taller   | cerrado_confirmado  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 |
+| catalogo | cerrado_confirmado  | 09 §3.1 — 9/10 ✓  | 102   | e41e247 | RepuestoRepositoryPG ✓ |
+| stock    | **cierre_parcial**  | 09 §3.3 — 10/12 ✓ | 178   | fb36c23 | falta StockRepositoryPG |
+| pedidos  | **cierre_parcial**  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 | falta PedidoRepositoryPG |
+| taller   | **cierre_parcial**  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 | falta TallerRepositoryPG |
 
 Todos los módulos: `cerrado_confirmado`. Suite completa actual: **831 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T11:00, entorno `.venv` aislado del proyecto).
 
@@ -48,7 +58,7 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 
 | Ítem                                              | Resultado                                          |
 |---------------------------------------------------|----------------------------------------------------|
-| 4 módulos — todos los criterios de módulo         | ✓ cerrado_confirmado por Sant                      |
+| 4 módulos — todos los criterios de módulo         | ⚠ CT-PERSISTENCIA-001: catalogo cerrado_confirmado · stock/pedidos/taller cierre_parcial (falta adaptador PG) |
 | Suite completa sin regresiones (09 §6)            | ✓ **831 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T11:00 (entorno aislado) |
 | check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 86.2%** · infra 85.5% (verificado en entorno aislado) |
 | Pipeline CI/CD verde en main                      | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
@@ -74,7 +84,7 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 |---------------------------------------------------|----------------------------------------------------|
 | `scripts/verify_seed.py` existe (CT-11-02)        | ✓ resuelto — script completo con logging JSON      |
 | `scripts/reencrypt_fernet.py` existe (CT-11-01)   | ✓ resuelto — script completo con --dry-run         |
-| Seed nivel 2 en staging                           | ✓ seed_nivel2_postgres() implementado · verify_seed --level=2 PASS 23/23 criterios (local, commit `632f73f`) |
+| Seed nivel 2 en staging                           | ⟳ seed_nivel2_postgres() existe pero BLOQUE BD no ✓ hasta que stock/pedidos/taller usen PG real |
 | E2E staging verde                                 | ⟳ pendiente — compuerta #2 (DATABASE_URL Railway) |
 | Checklist pre-deploy 08 §8.1 completo             | ⟳ próximo paso — LEGAL y Validación Elena pendientes |
 
@@ -113,3 +123,4 @@ Ninguna.
 | 2026-06-20T16:00:00Z    | 55/55 endpoints 03 §6 completos (EP-CAT-07 incluido vía PCT-003): EP-AUTH-01..04 + EP-ADM-01..05. 820 tests · 0 fallos · check_coverage exit 0. |
 | 2026-06-21T01:30:00Z    | PCT-05-002 — corrección de 3 números desactualizados detectados en inicio de sesión: tests 780→820, api/ coverage 91.7%→87.5%, endpoints "54/54"→"55/55". Todos reverificados con comandos crudos en `.venv` aislado del proyecto (CT-AISLAMIENTO-001 resuelto). Hallazgo adicional: asyncpg 0.29.x incompatible con Python 3.14.5 — corregido a 0.30.x en pyproject.toml (`aa24f2a`). |
 | 2026-06-21T11:00:00Z    | Sesión pre-deploy: bloques DESPLIEGUE + SEGURIDAD + LEGAL + OBSERVABILIDAD del checklist 08 §8.1. Construidos: Dockerfile · .dockerignore · docker-compose.yml · .env.example · ci.yml expandido (4 módulos + trivy + pip-audit) · reset-precio.yml · e2e-nightly.yml · rate_limiter.py · metrics_collector.py · /v1/metrics · /v1/privacidad · consentimiento_privacidad en EP-ADM-05 · 11 tests E2E (E2E-01/02/03). Suite: 820→831 tests · 0 fallos · check_coverage.py exit 0 · ruff OK (commit `72be97d`). |
+| 2026-06-21T13:30:00Z    | CT-PERSISTENCIA-001 — compuerta humana #6 ejecutada por Sant. Verificación funcional docker-compose confirmó con grep real: stock/pedidos/taller solo tienen InMemory, sin RepositoryPG. catalogo tiene RepuestoRepositoryPG completo. Reversión: stock/pedidos/taller de cerrado_confirmado → cierre_parcial. Declaración 09 §9.5 suspendida. Alcance autorizado: construir StockRepositoryPG + PedidoRepositoryPG + TallerRepositoryPG + tests PG + verificación funcional restart. |
