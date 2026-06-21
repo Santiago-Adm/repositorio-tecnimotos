@@ -7,7 +7,10 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from api.auth import (
+    ADMIN_ROLES, CLIENTE_ROLES, MECANICO_ROLES, VENDEDOR_ROLES, require_roles,
+)
 from pydantic import BaseModel, Field
 
 from api.dependencies import error_response, get_request_id, success_response
@@ -313,7 +316,8 @@ async def crear_reserva(request: Request, body: CrearReservaRequest) -> dict[str
     summary="EP-PED-07: Liberar reserva",
 )
 async def liberar_reserva(
-    request: Request, reserva_id: str, body: LiberarReservaRequest
+    request: Request, reserva_id: str, body: LiberarReservaRequest,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     stock = _get_stock(request)
@@ -348,7 +352,10 @@ async def liberar_reserva(
     status_code=status.HTTP_201_CREATED,
     summary="EP-PED-08: Emitir proforma",
 )
-async def emitir_proforma(request: Request, pedido_id: str) -> dict[str, Any]:
+async def emitir_proforma(
+    request: Request, pedido_id: str,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = EmitirProformaUseCase(repo)
     try:
@@ -384,7 +391,8 @@ async def emitir_proforma(request: Request, pedido_id: str) -> dict[str, Any]:
     summary="EP-PED-09: Registrar envío",
 )
 async def registrar_envio(
-    request: Request, pedido_id: str, body: RegistrarEnvioRequest
+    request: Request, pedido_id: str, body: RegistrarEnvioRequest,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -469,7 +477,10 @@ async def registrar_incidencia(request: Request, pedido_id: str) -> dict[str, An
     "/notificaciones/repuesto-disponible",
     summary="EP-PED-12: Solicitar notificación cuando repuesto esté disponible",
 )
-async def solicitar_notificacion_repuesto(request: Request) -> dict[str, Any]:
+async def solicitar_notificacion_repuesto(
+    request: Request,
+    _auth: dict = Depends(require_roles(*CLIENTE_ROLES)),
+) -> dict[str, Any]:
     return success_response(
         {"mensaje": "Notificación registrada"},
         request_id=get_request_id(request),
@@ -482,7 +493,8 @@ async def solicitar_notificacion_repuesto(request: Request) -> dict[str, Any]:
     summary="EP-PED-13: Crear lista de reserva progresiva",
 )
 async def crear_lista_reserva(
-    request: Request, body: CrearListaReservaRequest
+    request: Request, body: CrearListaReservaRequest,
+    _auth: dict = Depends(require_roles("CLIENTE_DISTRITO")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = CrearListaReservaUseCase(repo)
@@ -517,7 +529,8 @@ async def crear_lista_reserva(
     summary="EP-PED-14: Formalizar lista de reserva progresiva",
 )
 async def formalizar_lista_reserva(
-    request: Request, lista_id: str
+    request: Request, lista_id: str,
+    _auth: dict = Depends(require_roles("CLIENTE_DISTRITO")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -551,7 +564,8 @@ async def formalizar_lista_reserva(
     summary="EP-PED-15: Generar comprobante",
 )
 async def generar_comprobante(
-    request: Request, pedido_id: str, body: GenerarComprobanteRequest
+    request: Request, pedido_id: str, body: GenerarComprobanteRequest,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -588,7 +602,8 @@ async def generar_comprobante(
     summary="EP-PED-16: Aprobar y emitir comprobante",
 )
 async def aprobar_comprobante(
-    request: Request, comprobante_id: str
+    request: Request, comprobante_id: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
@@ -619,7 +634,8 @@ async def aprobar_comprobante(
     summary="EP-PED-17: Anular comprobante",
 )
 async def anular_comprobante(
-    request: Request, comprobante_id: str
+    request: Request, comprobante_id: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = AnularComprobanteUseCase(repo)

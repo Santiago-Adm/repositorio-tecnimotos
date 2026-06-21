@@ -7,7 +7,8 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from api.auth import ADMIN_ROLES, INTERNO_ROLES, VENDEDOR_ROLES, require_roles
 from pydantic import BaseModel, Field
 
 from api.dependencies import error_response, get_request_id, success_response
@@ -123,7 +124,10 @@ def _stock_to_dict(s) -> dict:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/stock/{codigo}", summary="EP-STK-01: Consultar stock por código")
-async def consultar_stock(request: Request, codigo: str) -> dict[str, Any]:
+async def consultar_stock(
+    request: Request, codigo: str,
+    _auth: dict = Depends(require_roles(*INTERNO_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ConsultarStockUseCase(repo)
     try:
@@ -141,7 +145,10 @@ async def consultar_stock(request: Request, codigo: str) -> dict[str, Any]:
 
 
 @router.get("/stock", summary="EP-STK-02: Listar todo el stock")
-async def listar_stock(request: Request) -> dict[str, Any]:
+async def listar_stock(
+    request: Request,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ListarStockUseCase(repo)
     stocks = await uc.execute()
@@ -155,7 +162,10 @@ async def listar_stock(request: Request) -> dict[str, Any]:
     "/stock/{codigo}/movimientos",
     summary="EP-STK-03: Historial de movimientos",
 )
-async def listar_movimientos(request: Request, codigo: str) -> dict[str, Any]:
+async def listar_movimientos(
+    request: Request, codigo: str,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ListarMovimientosUseCase(repo)
     try:
@@ -190,7 +200,8 @@ async def listar_movimientos(request: Request, codigo: str) -> dict[str, Any]:
 
 @router.post("/stock/{codigo}/ajuste", summary="EP-STK-04: Ajuste manual de stock")
 async def ajustar_stock(
-    request: Request, codigo: str, body: AjusteRequest
+    request: Request, codigo: str, body: AjusteRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     event_publisher = _get_event_publisher(request)
@@ -228,7 +239,8 @@ async def ajustar_stock(
     summary="EP-STK-05: Actualizar umbral mínimo",
 )
 async def actualizar_umbral(
-    request: Request, codigo: str, body: UmbralRequest
+    request: Request, codigo: str, body: UmbralRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ActualizarUmbralUseCase(repo)
@@ -258,7 +270,8 @@ async def actualizar_umbral(
     summary="EP-STK-06: Crear reabastecimiento",
 )
 async def crear_reabastecimiento(
-    request: Request, body: CrearReabastecimientoRequest
+    request: Request, body: CrearReabastecimientoRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = CrearReabastecimientoUseCase(repo)
@@ -290,7 +303,8 @@ async def crear_reabastecimiento(
     summary="EP-STK-07: Actualizar estado de reabastecimiento",
 )
 async def actualizar_estado_reabastecimiento(
-    request: Request, reab_id: str, body: ActualizarEstadoRequest
+    request: Request, reab_id: str, body: ActualizarEstadoRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     event_publisher = _get_event_publisher(request)
@@ -330,7 +344,8 @@ async def actualizar_estado_reabastecimiento(
     summary="EP-STK-08: Obtener reabastecimiento",
 )
 async def obtener_reabastecimiento(
-    request: Request, reab_id: str
+    request: Request, reab_id: str,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ObtenerReabastecimientoUseCase(repo)
