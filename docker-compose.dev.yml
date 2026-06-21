@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: tecnimotos
-      POSTGRES_PASSWORD: tecnimotos_dev
+      POSTGRES_PASSWORD: tecnimotos_dev  # fuente de verdad — sincronizado con settings.py y .env.example
       POSTGRES_DB: tecnimotos
     ports:
       - "5432:5432"
