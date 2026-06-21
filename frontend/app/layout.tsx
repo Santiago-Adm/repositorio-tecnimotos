@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Quicksand, Nunito_Sans, Fira_Code } from "next/font/google";
+import { AuthProvider } from "@/src/context/AuthContext";
 import "./globals.css";
 
 const displayFont = Quicksand({
@@ -35,7 +36,9 @@ export default function RootLayout({
       <body
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} font-body antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
