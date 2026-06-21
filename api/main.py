@@ -11,10 +11,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from api.dependencies import error_response, success_response
+from api.middleware.metrics_collector import MetricsCollectorMiddleware
+from api.middleware.rate_limiter import RateLimiterMiddleware
 from api.routes import admin as admin_router
 from api.routes import auth_routes as auth_router
 from api.routes import catalogo as catalogo_router
+from api.routes import metrics as metrics_router
 from api.routes import pedidos as pedidos_router
+from api.routes import privacidad as privacidad_router
 from api.routes import stock as stock_router
 from api.routes import taller as taller_router
 from src.catalogo.infrastructure.repositories.repuesto_repository_inmemory import (
@@ -60,6 +64,10 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
+    # Middleware order: outer → inner. MetricsCollector registra DESPUÉS de rate limit.
+    app.add_middleware(MetricsCollectorMiddleware)
+    app.add_middleware(RateLimiterMiddleware)
+
     # CorrelationMiddleware — establece request_id ANTES de call_next (02 §1.6)
     @app.middleware("http")
     async def correlation_middleware(request: Request, call_next):
@@ -104,6 +112,8 @@ def create_app() -> FastAPI:
     app.include_router(stock_router.router)
     app.include_router(pedidos_router.router)
     app.include_router(taller_router.router)
+    app.include_router(metrics_router.router)
+    app.include_router(privacidad_router.router)
 
     @app.get("/v1/health", tags=["health"])
     async def health(request: Request):

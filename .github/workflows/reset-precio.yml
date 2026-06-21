@@ -1,0 +1,46 @@
+name: Reset Precio Sesión
+
+# Checklist diario 08 §8.2 — ejecuta a las 05:00 UTC-5 (10:00 UTC)
+# Limpia precios de sesión en Redis DB-1: KEYS "precio:*" → vacío
+on:
+  schedule:
+    - cron: "0 10 * * 1-6"   # 05:00 UTC-5, lunes a sábado
+  workflow_dispatch:           # permite ejecución manual (runbook Tramo 3 §6)
+
+jobs:
+  reset-precio:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Reset precios de sesión en Redis DB-1
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Limpiando precios de sesión en Redis DB-1 (precio:*)..."
+          railway run --service redis -- \
+            redis-cli -n 1 --scan --pattern "precio:*" | \
+            xargs -r redis-cli -n 1 DEL || true
+          echo "Reset completado — $(date -u)"
+
+      - name: Verificar limpieza
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          COUNT=$(railway run --service redis -- \
+            redis-cli -n 1 --scan --pattern "precio:*" | wc -l || echo "0")
+          echo "Claves precio:* restantes: $COUNT"
+          if [ "$COUNT" -gt "0" ]; then
+            echo "ERROR: Quedan $COUNT claves precio:* sin eliminar"
+            exit 1
+          fi
+          echo "OK — Redis DB-1 limpio"

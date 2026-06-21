@@ -1,0 +1,43 @@
+# Entorno virtual y caché
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Secretos y claves — NUNCA en la imagen
+.env
+.env.local
+.env.*.local
+keys/
+*.pem
+*.key
+
+# Tests y cobertura — no se necesitan en producción
+tests/
+htmlcov/
+coverage.xml
+.coverage
+
+# Control de versiones
+.git/
+.gitignore
+
+# Documentación interna
+.doc3/
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Build artifacts
+dist/
+*.egg-info/
+build/
+
+# Archivos de desarrollo
+VERIFICACION_MANUAL.md
+docker-compose.dev.yml

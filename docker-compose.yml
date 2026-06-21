@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tecnimotos
+      POSTGRES_PASSWORD: tecnimotos_dev
+      POSTGRES_DB: tecnimotos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tecnimotos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://tecnimotos:tecnimotos_dev@postgres:5432/tecnimotos"
+      DATABASE_URL_SYNC: "postgresql://tecnimotos:tecnimotos_dev@postgres:5432/tecnimotos"
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_PARAMS_DB: "redis://redis:6379/1"
+      REDIS_NOTIFICATIONS_DB: "redis://redis:6379/2"
+    volumes:
+      - ./keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Ejecuta migraciones antes de arrancar el servidor (08 §8.1 bloque BD)
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  postgres_data:
+  redis_data:
