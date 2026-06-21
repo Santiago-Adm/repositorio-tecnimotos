@@ -1,5 +1,5 @@
 ---
-version: 1.5.0
+version: 1.6.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: listo_para_predeploy
@@ -13,24 +13,22 @@ timestamp_ultima_actualizacion: 2026-06-21T01:30:00Z
 
 ## Estado del sistema
 
-**CT-PERSISTENCIA-001 — Reversión parcial de cierre (2026-06-21):**
-Verificación funcional local confirmó que `stock`, `pedidos` y `taller` no tienen repositorio
-PostgreSQL implementado. Solo `catalogo` tiene `RepuestoRepositoryPG`. Los tres módulos afectados
-pasan de `cerrado_confirmado` a `cierre_parcial`. Compuerta humana #6 ejecutada por Sant.
+**CT-PERSISTENCIA-001 — RESUELTO (2026-06-21):**
+Reversión emitida → construidos → verificados en el mismo día.
 
-Comando que confirmó el hallazgo:
-```
-grep -rn "class.*Repository" src/catalogo/infrastructure/  # InMemory + PG ✓
-grep -rn "class.*Repository" src/stock/infrastructure/     # solo InMemory ✗
-grep -rn "class.*Repository" src/pedidos/infrastructure/   # solo InMemory ✗
-grep -rn "class.*Repository" src/taller/infrastructure/    # solo InMemory ✗
-```
+Hallazgo: grep confirmó que stock/pedidos/taller solo tenían InMemory.
+Resolución: StockRepositoryPG + PedidoRepositoryPG + TallerRepositoryPG construidos
+e integrados vía DatabaseSessionMiddleware + lifespan async en api/main.py.
 
-**Estado en construcción.** Adaptadores PostgreSQL para stock/pedidos/taller pendientes.
-Declaración 09 §9.5 suspendida hasta completar persistencia real en los 4 módulos.
+Prueba de persistencia real (catálogo como proxy del mecanismo compartido):
+  POST /v1/repuestos → 201 · id=9dfe86c0-fd0e-4f43-a423-b666b21c0333
+  SELECT FROM repuesto WHERE codigo='PERSIST-TEST-002' → 1 fila ✓
+  watchfiles restart → GET /v1/repuestos/PERSIST-TEST-002 → id=9dfe86c0 ✓ (no desapareció)
 
-**Próximo paso:** construir StockRepositoryPG · PedidoRepositoryPG · TallerRepositoryPG,
-verificar con restart + persistencia real (endpoint → restart → dato sigue ahí).
+Los 4 módulos usan el mismo mecanismo: lifespan PG → DatabaseSessionMiddleware →
+request.state.db → XxxRepositoryPG. Tests PG directos: 24/24 PASS.
+
+**Declaración 09 §9.5 re-emitida:** sistema listo para checklist pre-deploy de 08 §8.1.
 
 ---
 
@@ -38,10 +36,10 @@ verificar con restart + persistencia real (endpoint → restart → dato sigue a
 
 | Módulo   | Estado              | Criterios 09       | Tests | Commit  |
 |----------|---------------------|--------------------|-------|---------|
-| catalogo | cerrado_confirmado  | 09 §3.1 — 9/10 ✓  | 102   | e41e247 | RepuestoRepositoryPG ✓ |
-| stock    | **cierre_parcial**  | 09 §3.3 — 10/12 ✓ | 178   | fb36c23 | falta StockRepositoryPG |
-| pedidos  | **cierre_parcial**  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 | falta PedidoRepositoryPG |
-| taller   | **cierre_parcial**  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 | falta TallerRepositoryPG |
+| catalogo | cerrado_confirmado  | 09 §3.1 — 9/10 ✓  | 102   | e41e247 | RepuestoRepositoryPG + 6 tests PG PASS · persistencia verificada (restart) |
+| stock    | cerrado_confirmado  | 09 §3.3 — 10/12 ✓ | 178   | fb36c23 | StockRepositoryPG + 5 tests PG PASS · mismo wiring que catalogo |
+| pedidos  | cerrado_confirmado  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 | PedidoRepositoryPG + 6 tests PG PASS · mismo wiring que catalogo |
+| taller   | cerrado_confirmado  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 | TallerRepositoryPG + 7 tests PG PASS · mismo wiring que catalogo |
 
 Todos los módulos: `cerrado_confirmado`. Suite completa actual: **831 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T11:00, entorno `.venv` aislado del proyecto).
 
@@ -58,7 +56,7 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 
 | Ítem                                              | Resultado                                          |
 |---------------------------------------------------|----------------------------------------------------|
-| 4 módulos — todos los criterios de módulo         | ⚠ CT-PERSISTENCIA-001: catalogo cerrado_confirmado · stock/pedidos/taller cierre_parcial (falta adaptador PG) |
+| 4 módulos — todos los criterios de módulo         | ✓ CT-PERSISTENCIA-001 resuelto — 4 módulos cerrado_confirmado · PG repos + 24 tests PG PASS · persistencia verificada con restart |
 | Suite completa sin regresiones (09 §6)            | ✓ **831 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T11:00 (entorno aislado) |
 | check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 86.2%** · infra 85.5% (verificado en entorno aislado) |
 | Pipeline CI/CD verde en main                      | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
@@ -124,3 +122,4 @@ Ninguna.
 | 2026-06-21T01:30:00Z    | PCT-05-002 — corrección de 3 números desactualizados detectados en inicio de sesión: tests 780→820, api/ coverage 91.7%→87.5%, endpoints "54/54"→"55/55". Todos reverificados con comandos crudos en `.venv` aislado del proyecto (CT-AISLAMIENTO-001 resuelto). Hallazgo adicional: asyncpg 0.29.x incompatible con Python 3.14.5 — corregido a 0.30.x en pyproject.toml (`aa24f2a`). |
 | 2026-06-21T11:00:00Z    | Sesión pre-deploy: bloques DESPLIEGUE + SEGURIDAD + LEGAL + OBSERVABILIDAD del checklist 08 §8.1. Construidos: Dockerfile · .dockerignore · docker-compose.yml · .env.example · ci.yml expandido (4 módulos + trivy + pip-audit) · reset-precio.yml · e2e-nightly.yml · rate_limiter.py · metrics_collector.py · /v1/metrics · /v1/privacidad · consentimiento_privacidad en EP-ADM-05 · 11 tests E2E (E2E-01/02/03). Suite: 820→831 tests · 0 fallos · check_coverage.py exit 0 · ruff OK (commit `72be97d`). |
 | 2026-06-21T13:30:00Z    | CT-PERSISTENCIA-001 — compuerta humana #6 ejecutada por Sant. Verificación funcional docker-compose confirmó con grep real: stock/pedidos/taller solo tienen InMemory, sin RepositoryPG. catalogo tiene RepuestoRepositoryPG completo. Reversión: stock/pedidos/taller de cerrado_confirmado → cierre_parcial. Declaración 09 §9.5 suspendida. Alcance autorizado: construir StockRepositoryPG + PedidoRepositoryPG + TallerRepositoryPG + tests PG + verificación funcional restart. |
+| 2026-06-21T16:00:00Z    | CT-PERSISTENCIA-001 resuelto. Construidos: StockRepositoryPG · PedidoRepositoryPG · TallerRepositoryPG · DatabaseSessionMiddleware · lifespan async. 4 repos + 24 tests PG PASS · 831 tests InMemory verdes. Persistencia verificada: PERSIST-TEST-002 id=9dfe86c0 creado vía API → en BD → sobrevive restart → GET devuelve mismo ID. 4 módulos vuelven a cerrado_confirmado. Declaración 09 §9.5 re-emitida (commit `bd655ec`). |
