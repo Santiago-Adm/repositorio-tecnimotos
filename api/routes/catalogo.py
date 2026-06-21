@@ -127,6 +127,10 @@ class ConsultarListaRequest(BaseModel):
 # ── Factory de casos de uso (simplificado — la DI real va en factories.py) ──
 
 def _get_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.catalogo.infrastructure.repositories.repuesto_repository_pg import RepuestoRepositoryPG
+        return RepuestoRepositoryPG(db)
     return request.app.state.catalogo_repo
 
 

@@ -71,6 +71,10 @@ logger = logging.getLogger(__name__)
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.pedidos.infrastructure.repositories.pedido_repository_pg import PedidoRepositoryPG
+        return PedidoRepositoryPG(db)
     return request.app.state.pedidos_repo
 
 

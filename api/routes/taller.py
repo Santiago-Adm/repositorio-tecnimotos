@@ -59,6 +59,10 @@ logger = logging.getLogger(__name__)
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.taller.infrastructure.repositories.taller_repository_pg import TallerRepositoryPG
+        return TallerRepositoryPG(db)
     return request.app.state.taller_repo
 
 
