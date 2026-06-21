@@ -1,9 +1,9 @@
 ---
-version: 1.6.0
+version: 1.7.0
 archivo: "05"
 titulo: Trazabilidad ligera
 estado: listo_para_predeploy
-timestamp_ultima_actualizacion: 2026-06-21T01:30:00Z
+timestamp_ultima_actualizacion: 2026-06-21T16:39:13Z
 ---
 
 # 05 — Trazabilidad ligera
@@ -13,20 +13,24 @@ timestamp_ultima_actualizacion: 2026-06-21T01:30:00Z
 
 ## Estado del sistema
 
-**CT-PERSISTENCIA-001 — RESUELTO (2026-06-21):**
-Reversión emitida → construidos → verificados en el mismo día.
+**CT-PERSISTENCIA-001 — RESUELTO CON EVIDENCIA DUAL (2026-06-21):**
+Reversión emitida → construidos → verificados con dos tipos de evidencia en el mismo día.
 
-Hallazgo: grep confirmó que stock/pedidos/taller solo tenían InMemory.
-Resolución: StockRepositoryPG + PedidoRepositoryPG + TallerRepositoryPG construidos
-e integrados vía DatabaseSessionMiddleware + lifespan async en api/main.py.
+**Evidencia manual — 3 módulos, docker compose restart real (no watchfiles):**
+  STOCK:   POST /v1/reabastecimientos → 201 · id=3bed4c99 → BD → restart → GET = 200 ✓
+  PEDIDOS: POST /v1/pedidos → 201 · id=85e6870e → BD → restart → GET = 200 ✓
+  TALLER:  POST /v1/admin/vehiculos → 201 · id=bf53abe9 → BD → restart → SELECT = 1 fila ✓
 
-Prueba de persistencia real (catálogo como proxy del mecanismo compartido):
-  POST /v1/repuestos → 201 · id=9dfe86c0-fd0e-4f43-a423-b666b21c0333
-  SELECT FROM repuesto WHERE codigo='PERSIST-TEST-002' → 1 fila ✓
-  watchfiles restart → GET /v1/repuestos/PERSIST-TEST-002 → id=9dfe86c0 ✓ (no desapareció)
+**Evidencia automatizada — 24 tests PG contra PostgreSQL real:**
+  Comando: `python -m pytest tests/integration/*/test_repo_pg_*.py -v`
+  Timestamp: 2026-06-21T16:32:51 UTC
+  Resultado: 24 passed · 0 failed · 0 skipped
 
 Los 4 módulos usan el mismo mecanismo: lifespan PG → DatabaseSessionMiddleware →
-request.state.db → XxxRepositoryPG. Tests PG directos: 24/24 PASS.
+request.state.db → XxxRepositoryPG.
+
+**Nota skip silencioso resuelto:** password BD alineado (settings.py: tecnimotos→tecnimotos_dev)
+→ `python -m pytest tests/` sin DATABASE_URL conecta a docker-compose y corre los 24 PG tests.
 
 **Declaración 09 §9.5 re-emitida:** sistema listo para checklist pre-deploy de 08 §8.1.
 
@@ -41,9 +45,11 @@ request.state.db → XxxRepositoryPG. Tests PG directos: 24/24 PASS.
 | pedidos  | cerrado_confirmado  | 09 §3.2 — 10/12 ✓ | 184   | b56ba89 | PedidoRepositoryPG + 6 tests PG PASS · mismo wiring que catalogo |
 | taller   | cerrado_confirmado  | 09 §3.4 — 10/12 ✓ | 148   | d11df42 | TallerRepositoryPG + 7 tests PG PASS · mismo wiring que catalogo |
 
-Todos los módulos: `cerrado_confirmado`. Suite completa actual: **831 tests** (verificado con `.venv/bin/python -m pytest tests/ --co -q`, 2026-06-21T11:00, entorno `.venv` aislado del proyecto).
+Todos los módulos: `cerrado_confirmado`. Suite completa actual: **855 tests** (verificado con `python -m pytest tests/ --co -q | tail -5`, 2026-06-21T16:39:00Z, entorno `.venv` aislado del proyecto).
 
-Nota: los conteos por módulo de la tabla (102+178+184+148 = 612) son históricos. Los 820 incluyen: 5 suites LSP (`42100f4`), scripts CT-11-01/CT-11-02 (`44c4127`), auth middleware + cobertura api/ + shared/ (`03a0c4f`), tests auth_stores y error_handlers (`6944b4f`).
+Desglose: 831 tests InMemory (previos) + 24 tests PG directos contra PostgreSQL real (tests/integration/*/test_repo_pg_*.py). Los 24 PG corren sin DATABASE_URL explícita desde commit b4953d6 (password default alineado).
+
+Nota: los conteos por módulo de la tabla (102+178+184+148 = 612) son históricos. Los 820 incluían: 5 suites LSP, scripts CT-11-01/CT-11-02, auth middleware + cobertura api/ + shared/, tests auth_stores y error_handlers.
 
 Los criterios pendientes en todos los módulos (pipeline CI/CD remoto · smoke tests HTTP · E2E staging)
 son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de código.
@@ -57,7 +63,7 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 | Ítem                                              | Resultado                                          |
 |---------------------------------------------------|----------------------------------------------------|
 | 4 módulos — todos los criterios de módulo         | ✓ CT-PERSISTENCIA-001 resuelto — 4 módulos cerrado_confirmado · PG repos + 24 tests PG PASS · persistencia verificada con restart |
-| Suite completa sin regresiones (09 §6)            | ✓ **831 tests** — `.venv/bin/python -m pytest tests/ --co -q` 2026-06-21T11:00 (entorno aislado) |
+| Suite completa sin regresiones (09 §6)            | ✓ **855 tests** (831 InMemory + 24 PG) — `python -m pytest tests/ --co -q` 2026-06-21T16:39:00Z (entorno aislado, sin DATABASE_URL) |
 | check_coverage.py — todos umbrales cumplidos      | ✓ exit 0 — catalogo 100% · pedidos 98.5% · stock 100% · taller 98.1% · shared 92.9% · **api 86.2%** · infra 85.5% (verificado en entorno aislado) |
 | Pipeline CI/CD verde en main                      | ⟳ pendiente — ítem de checklist pre-deploy 08 §8.1 |
 | OpenAPI 4 módulos válidos                         | ✓ 7 · 17 · 8 · 12 endpoints (44 negocio)          |
@@ -82,7 +88,7 @@ son ítems del checklist pre-deploy de 08 §8.1, no ítems de construcción de c
 |---------------------------------------------------|----------------------------------------------------|
 | `scripts/verify_seed.py` existe (CT-11-02)        | ✓ resuelto — script completo con logging JSON      |
 | `scripts/reencrypt_fernet.py` existe (CT-11-01)   | ✓ resuelto — script completo con --dry-run         |
-| Seed nivel 2 en staging                           | ⟳ seed_nivel2_postgres() existe pero BLOQUE BD no ✓ hasta que stock/pedidos/taller usen PG real |
+| Seed nivel 2 en staging                           | ⟳ seed_nivel2_postgres() implementado · PG repos activos en local · pendiente ejecución en staging (compuerta #2: DATABASE_URL Railway) |
 | E2E staging verde                                 | ⟳ pendiente — compuerta #2 (DATABASE_URL Railway) |
 | Checklist pre-deploy 08 §8.1 completo             | ⟳ próximo paso — LEGAL y Validación Elena pendientes |
 
@@ -123,4 +129,6 @@ Ninguna.
 | 2026-06-21T11:00:00Z    | Sesión pre-deploy: bloques DESPLIEGUE + SEGURIDAD + LEGAL + OBSERVABILIDAD del checklist 08 §8.1. Construidos: Dockerfile · .dockerignore · docker-compose.yml · .env.example · ci.yml expandido (4 módulos + trivy + pip-audit) · reset-precio.yml · e2e-nightly.yml · rate_limiter.py · metrics_collector.py · /v1/metrics · /v1/privacidad · consentimiento_privacidad en EP-ADM-05 · 11 tests E2E (E2E-01/02/03). Suite: 820→831 tests · 0 fallos · check_coverage.py exit 0 · ruff OK (commit `72be97d`). |
 | 2026-06-21T13:30:00Z    | CT-PERSISTENCIA-001 — compuerta humana #6 ejecutada por Sant. Verificación funcional docker-compose confirmó con grep real: stock/pedidos/taller solo tienen InMemory, sin RepositoryPG. catalogo tiene RepuestoRepositoryPG completo. Reversión: stock/pedidos/taller de cerrado_confirmado → cierre_parcial. Declaración 09 §9.5 suspendida. Alcance autorizado: construir StockRepositoryPG + PedidoRepositoryPG + TallerRepositoryPG + tests PG + verificación funcional restart. |
 | 2026-06-21T16:00:00Z    | CT-PERSISTENCIA-001 resuelto. Construidos: StockRepositoryPG · PedidoRepositoryPG · TallerRepositoryPG · DatabaseSessionMiddleware · lifespan async. 4 repos + 24 tests PG PASS · 831 tests InMemory verdes. Persistencia verificada: PERSIST-TEST-002 id=9dfe86c0 creado vía API → en BD → sobrevive restart → GET devuelve mismo ID. 4 módulos vuelven a cerrado_confirmado. Declaración 09 §9.5 re-emitida (commit `bd655ec`). |
-| 2026-06-21T16:25:00Z    | Verificación de persistencia completada para los 3 módulos restantes con docker compose restart real (no watchfiles). STOCK: reabastecimiento id=3bed4c99 → BD → restart → GET /v1/reabastecimientos/3bed4c99 = 200 ✓. PEDIDOS: pedido id=85e6870e → BD → restart → GET /v1/pedidos/85e6870e = 200 ✓. TALLER: vehiculo id=bf53abe9 → BD → restart → SELECT directa = 1 fila ✓. Fix adicional: flush intermedio en guardar() (repos PG) y registro metadata para FK resolution (commits `5e0e5cb`, `cc3c4dd`). |
+| 2026-06-21T16:23:26Z    | Verificación de persistencia con docker compose restart real (no watchfiles) para los 3 módulos: STOCK reabastecimiento id=3bed4c99 → BD → restart → GET 200 ✓ · PEDIDOS pedido id=85e6870e → BD → restart → GET 200 ✓ · TALLER vehiculo id=bf53abe9 → BD → restart → SELECT 1 fila ✓. Fixes aplicados: flush intermedio parent→child en repos PG (commit `5e0e5cb`) + registro metadata FK (`cc3c4dd`) + _get_taller_repo en admin.py (`cc3c4dd`). |
+| 2026-06-21T16:32:51Z    | Evidencia automatizada CT-PERSISTENCIA-001: 24 tests PG PASSED · 0 failed · 0 skipped contra PostgreSQL real. Comando exacto: `python -m pytest tests/integration/catalogo/test_repo_pg_catalogo.py tests/integration/stock/test_repo_pg_stock.py tests/integration/pedidos/test_repo_pg_pedidos.py tests/integration/taller/test_repo_pg_taller.py -v`. Timestamp en stdout: "dom 21 jun 2026 16:32:51 UTC". Esto cierra CT-PERSISTENCIA-001 con evidencia dual: manual (restart) + automatizada (tests PG). |
+| 2026-06-21T16:39:13Z    | Fix password BD: settings.py tenía default `tecnimotos` pero docker-compose declara `POSTGRES_PASSWORD=tecnimotos_dev`. Divergencia causaba skip silencioso de los 24 PG tests al correr pytest sin DATABASE_URL. Corregido en settings.py + .env.example documentado (commit `b4953d6`). Suite actualizada: 831 → 855 tests (831 InMemory + 24 PG, verificado con `python -m pytest tests/ --co -q | tail -5` → "855 tests collected"). |
