@@ -3,45 +3,20 @@
 @tailwind utilities;
 
 :root {
-  /* Brand Tokens */
   --color-teal: #0D9488;
   --color-electric: #8B5CF6;
   --color-surface-dark: #0F172A;
   --color-surface-light: #F8FAFC;
-
-  /* Default Page Setup (Public Interface default) */
-  --background: var(--color-surface-light);
-  --foreground: #1e293b; /* slate-800 */
-}
-
-/* Custom Surface Themes */
-.theme-internal {
-  --background: var(--color-surface-dark);
-  --foreground: #f8fafc; /* slate-50 */
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-.theme-public {
-  --background: var(--color-surface-light);
-  --foreground: #1e293b; /* slate-800 */
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-body {
-  color: var(--foreground);
-  background-color: var(--background);
 }
 
 @layer base {
-  h1, h2, h3, h4, h5, h6 {
+  body {
+    font-family: var(--font-body), sans-serif;
+  }
+  h1, h2 {
     font-family: var(--font-display), sans-serif;
   }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  code, .mono {
+    font-family: var(--font-mono), monospace;
   }
 }

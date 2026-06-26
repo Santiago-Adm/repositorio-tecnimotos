@@ -1,189 +1,209 @@
-"use client";
+'use client'
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/src/context/AuthContext";
-import Link from "next/link";
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/src/context/AuthContext'
+import { ApiCallError, rolToRoute } from '@/src/lib/types'
+import Link from 'next/link'
+
+type Step = 'credentials' | 'mfa'
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { login, verifyMfa, error, clearError } = useAuth();
+  const { login, verifyMfa, user, loading } = useAuth()
+  const router = useRouter()
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mfaToken, setMfaToken] = useState<string | null>(null);
-  const [totpCode, setTotpCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"credentials" | "mfa">("credentials");
+  const [step, setStep] = useState<Step>('credentials')
+  const [mfaSessionToken, setMfaSessionToken] = useState('')
 
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) return;
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [totp, setTotp] = useState('')
 
-    setLoading(true);
-    clearError();
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-    const res = await login(email, password);
-    setLoading(false);
-
-    if (res.status === "MFA_REQUIRED" && res.mfaToken) {
-      setMfaToken(res.mfaToken);
-      setStep("mfa");
-    } else if (res.status === "SUCCESS") {
-      // Direct login (if backend bypassed MFA, though EP-AUTH-01 always returns mfa_session_token)
-      router.push("/");
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace(rolToRoute(user.rol))
     }
-  };
+  }, [loading, user, router])
 
-  const handleMfaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!mfaToken || !totpCode) return;
-
-    setLoading(true);
-    clearError();
-
-    const res = await verifyMfa(mfaToken, totpCode);
-    setLoading(false);
-
-    if (res.status === "SUCCESS") {
-      // Decode user role or fetch state to decide route
-      // Let's reload or push to root page which will redirect or show portals
-      router.push("/");
+  async function handleCredentials(e: React.FormEvent) {
+    e.preventDefault()
+    setErrorMsg(null)
+    setSubmitting(true)
+    try {
+      const token = await login(email, password)
+      setMfaSessionToken(token)
+      setStep('mfa')
+    } catch (err) {
+      if (err instanceof ApiCallError) {
+        setErrorMsg(
+          err.code === 'AUTENTICACION_REQUERIDA'
+            ? 'Correo o contraseña incorrectos.'
+            : err.message,
+        )
+      } else {
+        setErrorMsg('Ocurrió un error. Intenta de nuevo.')
+      }
+    } finally {
+      setSubmitting(false)
     }
-  };
+  }
+
+  async function handleMfa(e: React.FormEvent) {
+    e.preventDefault()
+    setErrorMsg(null)
+    setSubmitting(true)
+    try {
+      await verifyMfa(mfaSessionToken, totp)
+    } catch (err) {
+      if (err instanceof ApiCallError) {
+        if (err.code === 'AUTENTICACION_REQUERIDA') {
+          const isExpired = err.message?.toLowerCase().includes('expir')
+          if (isExpired) {
+            setErrorMsg('El tiempo para verificar venció. Ingresa tus datos de nuevo.')
+            setStep('credentials')
+            setTotp('')
+          } else {
+            setErrorMsg('Código incorrecto. Intenta de nuevo.')
+          }
+        } else {
+          setErrorMsg(err.message)
+        }
+      } else {
+        setErrorMsg('Ocurrió un error. Intenta de nuevo.')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-light flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center items-center px-6 relative overflow-hidden font-body">
-      {/* Decorative background gradients */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl -z-10"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-electric-500/10 rounded-full blur-3xl -z-10"></div>
-
-      <div className="max-w-md w-full bg-slate-950/80 border border-slate-800 backdrop-blur-lg rounded-3xl p-8 shadow-2xl space-y-8">
-        {/* Brand */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 to-electric-500 flex items-center justify-center text-white font-display font-bold text-2xl shadow-lg shadow-teal-500/20 mx-auto">
-            S
-          </div>
-          <h2 className="font-display font-extrabold text-2xl tracking-tight text-white mt-4">
-            {step === "credentials" ? "Iniciar Sesión" : "Autenticación MFA"}
-          </h2>
-          <p className="text-slate-400 text-xs">
-            {step === "credentials" 
-              ? "Ingresa tus credenciales para acceder a la plataforma SANTI" 
-              : "Ingresa el código de 6 dígitos enviado a tu dispositivo"}
-          </p>
+    <div className="min-h-screen bg-surface-light flex flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          {/* Referencia al asset de logo — requiere /brand/logo-positivo.svg provisto por Sant (10 §3.5) */}
+          <img
+            src="/brand/logo-positivo.svg"
+            alt="Tecnimotos"
+            className="h-10 mx-auto"
+          />
         </div>
 
-        {error && (
-          <div className="bg-red-950/60 border border-red-900/50 text-red-400 p-4 rounded-2xl text-xs font-semibold">
-            {error}
-          </div>
-        )}
-
-        {step === "credentials" ? (
-          <form onSubmit={handleCredentialsSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Correo Electrónico
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="ejemplo@tecnimotos.test"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 focus:outline-none focus:border-teal-500 text-sm bg-slate-900 text-white font-body"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 focus:outline-none focus:border-teal-500 text-sm bg-slate-900 text-white"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 rounded-xl transition-all shadow-md shadow-teal-500/10 text-sm flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
-                  Autenticando...
-                </>
-              ) : (
-                "Ingresar"
-              )}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleMfaSubmit} className="space-y-6">
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Código de Verificación TOTP
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                pattern="^[0-9]{6}$"
-                placeholder="000000"
-                className="w-full px-4 py-3 rounded-xl border border-slate-800 focus:outline-none focus:border-teal-500 text-center tracking-widest text-lg font-mono bg-slate-900 text-white"
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value)}
-              />
-              <p className="text-[10px] text-slate-500 mt-2 text-center">
-                (En el entorno de desarrollo, cualquier código de 6 dígitos numéricos será válido)
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          {step === 'credentials' ? (
+            <>
+              <h1 className="font-display text-xl font-semibold text-slate-800 mb-1">
+                Ingresar
+              </h1>
+              <p className="font-body text-sm text-slate-500 mb-6">
+                Ingresa tus credenciales para continuar.
               </p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-electric-600 hover:bg-electric-700 text-white font-medium py-3 rounded-xl transition-all shadow-md shadow-electric-500/10 text-sm flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
-                    Verificando...
-                  </>
-                ) : (
-                  "Verificar Código"
+              <form onSubmit={handleCredentials} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs font-body font-semibold text-slate-600 mb-1">
+                    Correo electrónico
+                  </label>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    disabled={submitting}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-body font-semibold text-slate-600 mb-1">
+                    Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    disabled={submitting}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal disabled:opacity-60"
+                  />
+                </div>
+                {errorMsg && (
+                  <p className="text-sm text-red-600 font-body">{errorMsg}</p>
                 )}
-              </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-2.5 rounded-lg bg-teal text-white text-sm font-body font-semibold hover:bg-teal/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Verificando...' : 'Continuar'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h1 className="font-display text-xl font-semibold text-slate-800 mb-1">
+                Verificación
+              </h1>
+              <p className="font-body text-sm text-slate-500 mb-6">
+                Ingresa el código de 6 dígitos de tu aplicación de autenticación.
+              </p>
+              <form onSubmit={handleMfa} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs font-body font-semibold text-slate-600 mb-1">
+                    Código de verificación
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    required
+                    value={totp}
+                    onChange={e => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    disabled={submitting}
+                    placeholder="000000"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-teal disabled:opacity-60"
+                  />
+                </div>
+                {errorMsg && (
+                  <p className="text-sm text-red-600 font-body">{errorMsg}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={submitting || totp.length !== 6}
+                  className="w-full py-2.5 rounded-lg bg-teal text-white text-sm font-body font-semibold hover:bg-teal/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Verificando...' : 'Ingresar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStep('credentials'); setErrorMsg(null); setTotp('') }}
+                  className="text-sm text-slate-500 hover:text-slate-700 font-body underline"
+                >
+                  Volver a credenciales
+                </button>
+              </form>
+            </>
+          )}
+        </div>
 
-              <button
-                type="button"
-                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium py-3 rounded-xl transition-colors text-sm"
-                onClick={() => {
-                  setStep("credentials");
-                  setTotpCode("");
-                }}
-              >
-                Volver
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      <div className="mt-8">
-        <Link href="/" className="text-xs text-slate-500 hover:text-teal-500 transition-colors">
-          ← Volver al Portal de Inicio
-        </Link>
+        <p className="mt-6 text-center text-xs text-slate-500 font-body">
+          <Link href="/privacidad" className="underline hover:text-slate-700">
+            Política de privacidad
+          </Link>
+        </p>
       </div>
     </div>
-  );
+  )
 }

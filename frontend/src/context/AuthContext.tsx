@@ -1,204 +1,96 @@
-"use client";
+'use client'
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import {
+  AuthUser,
+  Rol,
+  rolToRoute,
+  ApiCallError,
+} from '@/src/lib/types'
+import {
+  apiClient,
+  getStoredToken,
+  setStoredToken,
+  clearStoredToken,
+  decodeJwtPayload,
+} from '@/src/lib/api-client'
+import { useRouter } from 'next/navigation'
 
-export interface User {
-  id: string;
-  rol: string;
-  token_version: number;
+interface AuthContextValue {
+  user: AuthUser | null
+  token: string | null
+  loading: boolean
+  login: (email: string, password: string) => Promise<string>
+  verifyMfa: (mfaSessionToken: string, totpCode: string) => Promise<void>
+  logout: () => Promise<void>
 }
 
-interface AuthContextType {
-  user: User | null;
-  accessToken: string | null;
-  mfaSessionToken: string | null;
-  loading: boolean;
-  error: string | null;
-  login: (email: string, password: string) => Promise<{ status: "MFA_REQUIRED" | "SUCCESS" | "ERROR"; mfaToken?: string; error?: string }>;
-  verifyMfa: (mfaToken: string, code: string) => Promise<{ status: "SUCCESS" | "ERROR"; error?: string }>;
-  logout: () => Promise<void>;
-  clearError: () => void;
-}
+const AuthContext = createContext<AuthContextValue | null>(null)
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
-// zero-dependency helper to decode JWT claims in browser
-function parseJwt(token: string): { sub: string; rol: string; token_version: number } | null {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      window
-        .atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [mfaSessionToken, setMfaSessionToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Attempt to silently refresh token on mount
   useEffect(() => {
-    async function silentRefresh() {
+    const stored = getStoredToken()
+    if (stored) {
       try {
-        const res = await fetch("/api-proxy/v1/auth/refresh", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        if (res.ok) {
-          const body = await res.json();
-          const token = body.data?.access_token;
-          if (token) {
-            setAccessToken(token);
-            const claims = parseJwt(token);
-            if (claims) {
-              setUser({
-                id: claims.sub,
-                rol: claims.rol,
-                token_version: claims.token_version,
-              });
-            }
-          }
+        const payload = decodeJwtPayload(stored)
+        if (payload.exp * 1000 > Date.now()) {
+          setToken(stored)
+          setUser({ id: payload.sub, rol: payload.rol as Rol })
+        } else {
+          clearStoredToken()
         }
-      } catch (err) {
-        console.error("Silent refresh failed:", err);
-      } finally {
-        setLoading(false);
+      } catch {
+        clearStoredToken()
       }
     }
-    silentRefresh();
-  }, []);
+    setLoading(false)
+  }, [])
 
-  const login = async (email: string, password: string) => {
-    setError(null);
+  const login = useCallback(async (email: string, password: string): Promise<string> => {
+    const data = await apiClient.post<{ mfa_session_token: string }>('/v1/auth/login', { email, password })
+    return data.mfa_session_token
+  }, [])
+
+  const verifyMfa = useCallback(async (mfaSessionToken: string, totpCode: string): Promise<void> => {
+    const data = await apiClient.post<{ access_token: string; token_type: string }>('/v1/auth/mfa', {
+      mfa_session_token: mfaSessionToken,
+      totp_code: totpCode,
+    })
+    const accessToken = data.access_token
+    const payload = decodeJwtPayload(accessToken)
+    const authUser: AuthUser = { id: payload.sub, rol: payload.rol as Rol }
+    setStoredToken(accessToken)
+    setToken(accessToken)
+    setUser(authUser)
+    router.replace(rolToRoute(authUser.rol))
+  }, [router])
+
+  const logout = useCallback(async (): Promise<void> => {
     try {
-      const res = await fetch("/api-proxy/v1/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const body = await res.json();
-
-      if (!res.ok) {
-        const errMsg = body.detail?.message || "Error al iniciar sesión";
-        setError(errMsg);
-        return { status: "ERROR" as const, error: errMsg };
-      }
-
-      const mfaToken = body.data?.mfa_session_token;
-      if (mfaToken) {
-        setMfaSessionToken(mfaToken);
-        return { status: "MFA_REQUIRED" as const, mfaToken };
-      }
-
-      return { status: "ERROR" as const, error: "Respuesta de login inesperada" };
+      await apiClient.post('/v1/auth/logout')
     } catch {
-      const errMsg = "Error de red al conectar con el servidor";
-      setError(errMsg);
-      return { status: "ERROR" as const, error: errMsg };
+      // token may already be invalid — proceed with local cleanup
     }
-  };
-
-  const verifyMfa = async (mfaToken: string, code: string) => {
-    setError(null);
-    try {
-      const res = await fetch("/api-proxy/v1/auth/mfa", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mfa_session_token: mfaToken,
-          totp_code: code,
-        }),
-      });
-
-      const body = await res.json();
-
-      if (!res.ok) {
-        const errMsg = body.detail?.message || "Código MFA incorrecto";
-        setError(errMsg);
-        return { status: "ERROR" as const, error: errMsg };
-      }
-
-      const token = body.data?.access_token;
-      if (token) {
-        setAccessToken(token);
-        const claims = parseJwt(token);
-        if (claims) {
-          setUser({
-            id: claims.sub,
-            rol: claims.rol,
-            token_version: claims.token_version,
-          });
-        }
-        setMfaSessionToken(null);
-        return { status: "SUCCESS" as const };
-      }
-
-      return { status: "ERROR" as const, error: "No se recibió el token de acceso" };
-    } catch {
-      const errMsg = "Error de red al verificar el MFA";
-      setError(errMsg);
-      return { status: "ERROR" as const, error: errMsg };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await fetch("/api-proxy/v1/auth/logout", {
-        method: "POST",
-      });
-    } catch (err) {
-      console.error("Logout request failed:", err);
-    } finally {
-      setAccessToken(null);
-      setUser(null);
-      setMfaSessionToken(null);
-      setError(null);
-    }
-  };
-
-  const clearError = () => setError(null);
+    clearStoredToken()
+    setToken(null)
+    setUser(null)
+    router.replace('/login')
+  }, [router])
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        accessToken,
-        mfaSessionToken,
-        loading,
-        error,
-        login,
-        verifyMfa,
-        logout,
-        clearError,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, loading, login, verifyMfa, logout }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
+  return ctx
 }

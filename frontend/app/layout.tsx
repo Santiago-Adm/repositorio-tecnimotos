@@ -1,45 +1,39 @@
-import type { Metadata } from "next";
-import { Quicksand, Nunito_Sans, Fira_Code } from "next/font/google";
-import { AuthProvider } from "@/src/context/AuthContext";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { Quicksand, Nunito_Sans, Fira_Code } from 'next/font/google'
+import './globals.css'
+import { AuthProvider } from '@/src/context/AuthContext'
 
-const displayFont = Quicksand({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "500", "600", "700"],
-});
+const quicksand = Quicksand({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+})
 
-const bodyFont = Nunito_Sans({
-  subsets: ["latin"],
-  variable: "--font-body",
-  weight: ["300", "400", "600", "700", "800"],
-});
+const nunitoSans = Nunito_Sans({
+  subsets: ['latin'],
+  variable: '--font-body',
+  weight: ['400', '600', '700'],
+  display: 'swap',
+})
 
-const monoFont = Fira_Code({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  weight: ["400", "500", "600", "700"],
-});
+const firaCode = Fira_Code({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  weight: ['400', '500'],
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: "Tecnimotos Santi — Sistema de Gestión",
-  description: "Sistema de Asistencia y Núcleo Técnico Integral (SANTI) de Tecnimotos Santi",
-};
+  title: 'Tecnimotos',
+  description: 'Sistema de gestión Tecnimotos',
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body
-        className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} font-body antialiased`}
-      >
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+      <body className={`${quicksand.variable} ${nunitoSans.variable} ${firaCode.variable} font-body antialiased`}>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
-  );
+  )
 }

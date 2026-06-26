@@ -1,13 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api-proxy/:path*",
-        destination: "http://localhost:8010/:path*",
-      },
-    ];
-  },
-};
+const nextConfig = {}
 
-export default nextConfig;
+export default nextConfig
