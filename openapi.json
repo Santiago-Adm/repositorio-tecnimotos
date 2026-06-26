@@ -2593,6 +2593,116 @@
           }
         }
       }
+    },
+    "/v1/soporte/reportes": {
+      "post": {
+        "tags": [
+          "soporte"
+        ],
+        "summary": "EP-SOP-01: Crear reporte de soporte",
+        "operationId": "crear_reporte_soporte_v1_soporte_reportes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReporteSoporteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reporte creado en estado ABIERTO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReporteSoporteResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "title": "Response Crear Reporte Soporte"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token requerido"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "soporte"
+        ],
+        "summary": "EP-SOP-02: Listar reportes activos",
+        "operationId": "listar_reportes_soporte_v1_soporte_reportes_get",
+        "responses": {
+          "200": {
+            "description": "Lista de reportes ABIERTO/EN_INVESTIGACION",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reportes": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReporteSoporteResponse"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "title": "Response Listar Reportes Soporte"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token requerido"
+          },
+          "403": {
+            "description": "Solo SUPERADMIN"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3568,6 +3678,92 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "CrearReporteSoporteRequest": {
+        "properties": {
+          "descripcion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "title": "Descripcion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "descripcion"
+        ],
+        "title": "CrearReporteSoporteRequest"
+      },
+      "EstadoReporteSoporte": {
+        "type": "string",
+        "enum": [
+          "ABIERTO",
+          "EN_INVESTIGACION",
+          "RESUELTO",
+          "CERRADO_SIN_RESOLUCION"
+        ],
+        "title": "EstadoReporteSoporte"
+      },
+      "ReporteSoporteResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "usuario_reportante_id": {
+            "type": "string",
+            "title": "Usuario Reportante Id"
+          },
+          "rol_usuario_reportante": {
+            "type": "string",
+            "title": "Rol Usuario Reportante"
+          },
+          "descripcion": {
+            "type": "string",
+            "title": "Descripcion"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoReporteSoporte"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          },
+          "resuelto_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto Por"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "usuario_reportante_id",
+          "rol_usuario_reportante",
+          "descripcion",
+          "estado",
+          "creado_en"
+        ],
+        "title": "ReporteSoporteResponse"
       }
     }
   }

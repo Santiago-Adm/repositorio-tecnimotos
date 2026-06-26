@@ -22,6 +22,7 @@ from api.routes import catalogo as catalogo_router
 from api.routes import metrics as metrics_router
 from api.routes import pedidos as pedidos_router
 from api.routes import privacidad as privacidad_router
+from api.routes import soporte as soporte_router
 from api.routes import stock as stock_router
 from api.routes import taller as taller_router
 from src.catalogo.infrastructure.repositories.repuesto_repository_inmemory import (
@@ -47,6 +48,9 @@ from api.auth_stores import InMemorySessionStore, InMemoryUserStore
 from src.shared.events.event_bus import InMemoryEventBus
 from src.shared.infrastructure.logging import configure_logging, request_id_var
 from src.shared.infrastructure.parametros_adapters import InMemoryParametrosService
+from src.shared.infrastructure.repositories.reporte_soporte_repository_inmemory import (
+    InMemoryReporteSoporteRepository,
+)
 from src.shared.infrastructure.settings import get_settings
 
 settings = get_settings()
@@ -123,6 +127,7 @@ def create_app() -> FastAPI:
     app.state.user_store = InMemoryUserStore()
     app.state.session_store = InMemorySessionStore()
     app.state.parametros_service = InMemoryParametrosService()
+    app.state.soporte_repo = InMemoryReporteSoporteRepository()
 
     # Claves JWT RS256 — None si los archivos no existen (tests usan app.state directo)
     try:
@@ -146,6 +151,7 @@ def create_app() -> FastAPI:
     app.include_router(taller_router.router)
     app.include_router(metrics_router.router)
     app.include_router(privacidad_router.router)
+    app.include_router(soporte_router.router)
 
     @app.get("/v1/health", tags=["health"])
     async def health(request: Request):
