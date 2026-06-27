@@ -27,17 +27,13 @@ export default function MecanicoMasterDashboard() {
   const [error, setError] = useState<string | null>(null)
 
   function fetchOrdenes() {
-    setLoading(true)
-    setError(null)
-    apiClient
-      .get<OrdenTrabajo[]>('/v1/ordenes-trabajo')
-      .then(d => { setOrdenes(Array.isArray(d) ? d : []); setLoading(false) })
-      .catch((err: ApiCallError) => { setError(err.code); setLoading(false) })
+    // El backend no expone GET /v1/ordenes-trabajo (lista) aún — solo POST (crear) y GET por ID
+    setLoading(false)
   }
 
   useEffect(() => {
     if (user && user.rol !== 'MECANICO_MASTER') { router.replace('/login'); return }
-    fetchOrdenes()
+    setLoading(false)
   }, [user, router])
 
   if (!user) return null

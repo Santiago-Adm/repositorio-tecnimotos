@@ -12,10 +12,16 @@ import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 
 interface Repuesto {
+  id: string
   codigo: string
   nombre: string
-  descripcion?: string
-  disponible?: boolean
+  categoria?: string
+  activo?: boolean
+}
+
+interface RepuestosResponse {
+  repuestos: Repuesto[]
+  total: number
 }
 
 export default function VendedorDashboard() {
@@ -37,9 +43,9 @@ export default function VendedorDashboard() {
     setError(null)
     setSearched(true)
     try {
-      const params = busqueda ? `?q=${encodeURIComponent(busqueda)}` : ''
-      const data = await apiClient.get<Repuesto[]>(`/v1/repuestos${params}`)
-      setRepuestos(Array.isArray(data) ? data : [])
+      const q = busqueda ? `&q=${encodeURIComponent(busqueda)}` : ''
+      const data = await apiClient.get<RepuestosResponse>(`/v1/repuestos?universo=mototaxi${q}`)
+      setRepuestos(data.repuestos ?? [])
     } catch (err) {
       setError((err as ApiCallError).code)
     } finally {

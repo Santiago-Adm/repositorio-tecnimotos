@@ -11,18 +11,21 @@ import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 
-interface ListaReserva {
-  id: string
+interface Pedido {
+  pedido_id: string
   estado: string
-  total_items?: number
+  monto_total?: number
+  monto_efectivo?: number
+  canal_origen?: string
+  created_at?: string
+  precio_visible?: boolean
   precio_ajustado?: number | null
-  precio_visible: boolean
 }
 
 export default function ClienteDistritoDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
-  const [listas, setListas] = useState<ListaReserva[]>([])
+  const [listas, setListas] = useState<Pedido[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,8 +33,8 @@ export default function ClienteDistritoDashboard() {
     setLoading(true)
     setError(null)
     apiClient
-      .get<ListaReserva[]>('/v1/lista-reserva-progresiva')
-      .then(d => { setListas(Array.isArray(d) ? d : []); setLoading(false) })
+      .get<{pedidos: Pedido[], total: number}>('/v1/pedidos')
+      .then(d => { setListas(d.pedidos ?? []); setLoading(false) })
       .catch((err: ApiCallError) => { setError(err.code); setLoading(false) })
   }
 
@@ -61,6 +64,7 @@ export default function ClienteDistritoDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg font-semibold text-slate-100">Mi lista de repuestos</h2>
             <button onClick={fetchListas} className="text-xs text-teal font-body hover:underline">Actualizar</button>
+
           </div>
 
           {loading ? (
@@ -76,33 +80,29 @@ export default function ClienteDistritoDashboard() {
           ) : (
             <div className="space-y-3">
               {listas.map(l => (
-                <div key={l.id} className="rounded-xl bg-slate-800 border border-slate-700 p-4">
+                <div key={l.pedido_id} className="rounded-xl bg-slate-800 border border-slate-700 p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-mono text-slate-200 truncate max-w-[160px]">{l.id}</p>
+                    <p className="text-sm font-mono text-slate-200 truncate max-w-[160px]">{l.pedido_id}</p>
                     <span className={`text-xs px-2 py-1 rounded-full font-body ${
-                      l.estado === 'ACTIVA' ? 'bg-teal/20 text-teal' :
-                      l.estado === 'EN_REVISION' ? 'bg-electric/20 text-electric' :
+                      l.estado === 'PENDIENTE_CONFIRMACION' ? 'bg-teal/20 text-teal' :
+                      l.estado === 'PENDIENTE_VALIDACION' ? 'bg-electric/20 text-electric' :
+                      l.estado === 'CONFIRMADO' ? 'bg-green-900/40 text-green-400' :
                       'bg-slate-700 text-slate-400'
                     }`}>
-                      {l.estado === 'EN_REVISION' ? 'En revisión de precios' : l.estado}
+                      {l.estado?.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  {l.total_items !== undefined && (
-                    <p className="text-xs text-slate-400 font-body">{l.total_items} ítems</p>
-                  )}
                   {/*
                     precio_ajustado solo visible cuando ADMINISTRADOR lo aprobó
-                    (02 §5.3 HU-S2-02 Escenario 1 — antes de aprobación NO se muestra)
+                    (02 §5.3 HU-S2-02 — antes de aprobación NO se muestra el precio)
                   */}
-                  {l.precio_visible && l.precio_ajustado != null ? (
+                  {l.monto_total != null ? (
                     <p className="text-sm font-mono text-teal mt-1">
-                      S/ {l.precio_ajustado.toFixed(2)}
+                      S/ {l.monto_total.toFixed(2)}
                     </p>
-                  ) : l.estado === 'EN_REVISION' ? (
-                    <p className="text-xs text-slate-500 font-body mt-1">
-                      Precio en revisión — se confirmará pronto
-                    </p>
-                  ) : null}
+                  ) : (
+                    <p className="text-xs text-slate-500 font-body mt-1">Precio en revisión</p>
+                  )}
                 </div>
               ))}
             </div>

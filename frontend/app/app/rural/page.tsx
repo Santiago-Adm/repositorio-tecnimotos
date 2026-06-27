@@ -14,9 +14,10 @@ import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 const TIMEOUT_MS = 30_000
 
 interface Repuesto {
+  id: string
   codigo: string
   nombre: string
-  disponible?: boolean
+  activo?: boolean
 }
 
 export default function ClienteRuralDashboard() {
@@ -53,9 +54,11 @@ export default function ClienteRuralDashboard() {
     }, TIMEOUT_MS)
 
     try {
-      const data = await apiClient.get<Repuesto[]>(`/v1/repuestos?q=${encodeURIComponent(busqueda)}`)
+      const data = await apiClient.get<{repuestos: Repuesto[], total: number}>(
+        `/v1/repuestos?universo=mototaxi&q=${encodeURIComponent(busqueda)}`
+      )
       clearTimeout(timeoutId)
-      setRepuestos(Array.isArray(data) ? data : [])
+      setRepuestos(data.repuestos ?? [])
     } catch (err) {
       clearTimeout(timeoutId)
       if ((err as Error).name === 'AbortError') return
@@ -130,8 +133,8 @@ export default function ClienteRuralDashboard() {
                       <p className="text-sm font-mono text-slate-200">{r.codigo}</p>
                       <p className="text-xs text-slate-400 font-body">{r.nombre}</p>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-body ${r.disponible !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
-                      {r.disponible !== false ? 'Disponible' : 'Sin stock'}
+                    <span className={`text-xs px-2 py-1 rounded-full font-body ${r.activo !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
+                      {r.activo !== false ? 'Disponible' : 'Sin stock'}
                     </span>
                   </div>
                 ))}

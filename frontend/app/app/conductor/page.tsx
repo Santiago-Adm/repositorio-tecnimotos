@@ -12,9 +12,10 @@ import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 
 interface Repuesto {
+  id: string
   codigo: string
   nombre: string
-  disponible?: boolean
+  activo?: boolean
 }
 
 export default function ClienteConductorDashboard() {
@@ -35,8 +36,10 @@ export default function ClienteConductorDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const data = await apiClient.get<Repuesto[]>(`/v1/repuestos?q=${encodeURIComponent(busqueda)}`)
-      setRepuestos(Array.isArray(data) ? data : [])
+      const data = await apiClient.get<{repuestos: Repuesto[], total: number}>(
+        `/v1/repuestos?universo=mototaxi&q=${encodeURIComponent(busqueda)}`
+      )
+      setRepuestos(data.repuestos ?? [])
     } catch (err) {
       setError((err as ApiCallError).code)
     } finally {
@@ -96,8 +99,8 @@ export default function ClienteConductorDashboard() {
                       <p className="text-sm font-mono text-slate-200">{r.codigo}</p>
                       <p className="text-xs text-slate-400 font-body">{r.nombre}</p>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-body ${r.disponible !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
-                      {r.disponible !== false ? 'Disponible' : 'Sin stock'}
+                    <span className={`text-xs px-2 py-1 rounded-full font-body ${r.activo !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
+                      {r.activo !== false ? 'Disponible' : 'Sin stock'}
                     </span>
                   </div>
                 ))}

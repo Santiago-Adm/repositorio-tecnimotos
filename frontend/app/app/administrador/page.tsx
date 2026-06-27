@@ -12,11 +12,18 @@ import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 
 interface StockItem {
+  repuesto_id: string
   codigo: string
-  nombre?: string
   cantidad_disponible: number
-  umbral_minimo?: number
-  alerta?: boolean
+  cantidad_apartada: number
+  umbral_minimo: number
+  esta_bajo_umbral: boolean
+  esta_agotado: boolean
+}
+
+interface StockResponse {
+  stocks: StockItem[]
+  total: number
 }
 
 export default function AdministradorDashboard() {
@@ -30,8 +37,8 @@ export default function AdministradorDashboard() {
     setLoading(true)
     setError(null)
     apiClient
-      .get<StockItem[]>('/v1/stock')
-      .then(d => { setStock(d); setLoading(false) })
+      .get<StockResponse>('/v1/stock')
+      .then(d => { setStock(d.stocks); setLoading(false) })
       .catch((err: ApiCallError) => { setError(err.code); setLoading(false) })
   }
 
@@ -42,7 +49,7 @@ export default function AdministradorDashboard() {
 
   if (!user) return null
 
-  const alertas = stock.filter(s => s.umbral_minimo !== undefined && s.cantidad_disponible <= s.umbral_minimo)
+  const alertas = stock.filter(s => s.esta_bajo_umbral)
 
   return (
     <div className="min-h-screen bg-surface-dark text-slate-100">
@@ -69,15 +76,10 @@ export default function AdministradorDashboard() {
               <div className="rounded-xl border border-electric/30 bg-electric/5 divide-y divide-slate-800">
                 {alertas.map(s => (
                   <div key={s.codigo} className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-mono text-slate-200">{s.codigo}</p>
-                      {s.nombre && <p className="text-xs text-slate-400 font-body">{s.nombre}</p>}
-                    </div>
+                    <p className="text-sm font-mono text-slate-200">{s.codigo}</p>
                     <div className="text-right">
                       <p className="text-sm font-mono text-electric">{s.cantidad_disponible} uds</p>
-                      {s.umbral_minimo !== undefined && (
-                        <p className="text-xs text-slate-500 font-body">mínimo: {s.umbral_minimo}</p>
-                      )}
+                      <p className="text-xs text-slate-500 font-body">mínimo: {s.umbral_minimo}</p>
                     </div>
                   </div>
                 ))}
@@ -108,10 +110,10 @@ export default function AdministradorDashboard() {
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {stock.map(s => (
-                      <tr key={s.codigo} className={s.umbral_minimo !== undefined && s.cantidad_disponible <= s.umbral_minimo ? 'bg-electric/5' : ''}>
+                      <tr key={s.codigo} className={s.esta_bajo_umbral ? 'bg-electric/5' : ''}>
                         <td className="px-4 py-2 font-mono text-slate-200">{s.codigo}</td>
                         <td className="px-4 py-2 text-right font-mono text-slate-200">{s.cantidad_disponible}</td>
-                        <td className="px-4 py-2 text-right font-mono text-slate-400">{s.umbral_minimo ?? '—'}</td>
+                        <td className="px-4 py-2 text-right font-mono text-slate-400">{s.umbral_minimo}</td>
                       </tr>
                     ))}
                   </tbody>
