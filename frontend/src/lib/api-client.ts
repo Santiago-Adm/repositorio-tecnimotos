@@ -2,7 +2,8 @@
 
 import { ApiCallError } from './types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+// Rutas relativas — Next.js reescribe /v1/* → backend (ver next.config.mjs)
+const API_BASE = ''
 const TOKEN_KEY = 'tm_access_token'
 
 export function getStoredToken(): string | null {
