@@ -154,7 +154,7 @@ async def test_login_rechazado_mientras_pendiente_con_mensaje_especifico(usuario
 async def test_login_rechazado_mientras_en_revision(app_client):
     await _registrar(app_client, email="enrev@test.com", password="clave1234", rol="VENDEDOR")
     user_store = app_client.app.state.user_store
-    user = user_store.buscar_por_email("enrev@test.com")
+    user = await user_store.buscar_por_email("enrev@test.com")
     user.estado_cuenta = "EN_REVISION"
 
     r = await app_client.post("/v1/auth/login", json={"email": "enrev@test.com", "password": "clave1234"})
@@ -166,8 +166,8 @@ async def test_login_rechazado_mientras_en_revision(app_client):
 async def test_login_rechazado_tras_rechazo_admin(app_client):
     await _registrar(app_client, email="rechazado@test.com", password="clave1234", rol="VENDEDOR")
     user_store = app_client.app.state.user_store
-    user = user_store.buscar_por_email("rechazado@test.com")
-    user_store.rechazar_cuenta(user.usuario_id, "Documentos ilegibles, no se puede verificar identidad.")
+    user = await user_store.buscar_por_email("rechazado@test.com")
+    await user_store.rechazar_cuenta(user.usuario_id, "Documentos ilegibles, no se puede verificar identidad.")
 
     r = await app_client.post("/v1/auth/login", json={"email": "rechazado@test.com", "password": "clave1234"})
     assert r.status_code == 403
@@ -264,7 +264,7 @@ async def test_admin_crea_usuario_directo_sin_revision(app_client):
 
     # Confirmar que está ACTIVO en el store
     user_store = app_client.app.state.user_store
-    user = user_store.obtener_por_id(uid)
+    user = await user_store.obtener_por_id(uid)
     assert user is not None
     assert user.estado_cuenta == ESTADO_ACTIVO
 

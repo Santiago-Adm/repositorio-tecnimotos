@@ -22,9 +22,9 @@ export default function LandingRural() {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    apiClient.get<{ repuestos: Repuesto[] }>('/v1/repuestos?universo=mototaxi_3r')
+    apiClient.get<{ repuestos: Repuesto[] }>('/v1/repuestos?universo=mototaxi_3r&destacado=true&limit=12')
       .then(data => {
-        setRepuestos(data.repuestos.slice(0, 6))
+        setRepuestos(data.repuestos)
         setCargando(false)
       })
       .catch(() => {

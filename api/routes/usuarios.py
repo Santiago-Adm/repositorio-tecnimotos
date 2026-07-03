@@ -60,8 +60,13 @@ async def actualizar_tema(
         )
 
     usuario_id = request.state.user_id
-    user_store = request.app.state.user_store
-    user = user_store.actualizar_variante_tema(usuario_id, body.variante_tema)
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.usuario_repository_pg import UsuarioRepositoryPG
+        user_store = UsuarioRepositoryPG(db)
+    else:
+        user_store = request.app.state.user_store
+    user = await user_store.actualizar_variante_tema(usuario_id, body.variante_tema)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

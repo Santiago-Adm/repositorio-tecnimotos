@@ -57,7 +57,7 @@ async def test_cambio_tema_exitoso_interno(app_client):
 async def test_cambio_tema_exitoso_cliente(app_client):
     """Rol CLIENTE_CONDUCTOR puede cambiar a variante CLARO_CALIDO."""
     user_store = app_client.app.state.user_store
-    user = user_store.crear_usuario(
+    user = await user_store.crear_usuario(
         email="conductor@tema.test",
         nombre="Conductor Tema",
         rol="CLIENTE_CONDUCTOR",
@@ -92,7 +92,7 @@ async def test_cambio_tema_exitoso_alto_contraste_interno(app_client):
 async def test_cambio_tema_exitoso_alto_contraste_cliente(app_client):
     """Rol CLIENTE_RURAL puede cambiar a variante CLARO_ALTO_CONTRASTE."""
     user_store = app_client.app.state.user_store
-    user = user_store.crear_usuario(
+    user = await user_store.crear_usuario(
         email="rural@tema.test",
         nombre="Rural Tema",
         rol="CLIENTE_RURAL",
@@ -129,7 +129,7 @@ async def test_rechazo_cruce_superficie_interno_a_claro(app_client):
 async def test_rechazo_cruce_superficie_cliente_a_oscuro(app_client):
     """Rol CLIENTE_DISTRITO intenta variante OSCURO_* — debe ser rechazado con VALIDACION_FALLIDA 422."""
     user_store = app_client.app.state.user_store
-    user = user_store.crear_usuario(
+    user = await user_store.crear_usuario(
         email="distrito@tema.test",
         nombre="Distrito Tema",
         rol="CLIENTE_DISTRITO",
@@ -283,7 +283,7 @@ async def test_variante_tema_en_response_mfa_cliente(app_client):
     Crea usuario activo via user_store (ACTIVO para poder hacer login sin aprobación).
     """
     user_store = app_client.app.state.user_store
-    user_store.crear_usuario(
+    await user_store.crear_usuario(
         email="cliente_login@tema.test",
         nombre="Cliente Login",
         rol="CLIENTE_CONDUCTOR",

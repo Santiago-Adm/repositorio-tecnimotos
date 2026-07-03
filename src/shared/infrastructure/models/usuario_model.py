@@ -1,4 +1,6 @@
-"""Modelos SQLAlchemy compartidos: usuario, usuario_perfil, sesion (03 §5.6)."""
+"""Modelos SQLAlchemy compartidos: usuario, usuario_perfil, sesion (03 §5.6).
+ADR-014: nombre/estado_cuenta/motivo_rechazo/variante_tema/mfa_fallos_consecutivos/
+mfa_bloqueado_hasta — campos que antes solo vivían en InMemoryUserStore.UsuarioRecord."""
 from __future__ import annotations
 
 import uuid
@@ -25,6 +27,12 @@ class UsuarioModel(Base):
     ultimo_acceso: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    nombre: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    estado_cuenta: Mapped[str] = mapped_column(String(30), nullable=False, default="ACTIVO")
+    motivo_rechazo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    variante_tema: Mapped[str] = mapped_column(String(30), nullable=False, default="OSCURO_ESTANDAR")
+    mfa_fallos_consecutivos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mfa_bloqueado_hasta: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -33,8 +41,51 @@ class UsuarioModel(Base):
             "'CLIENTE_FLOTA_CONDUCTOR','CLIENTE_MOTOLINEAL')",
             name="chk_usuario_rol",
         ),
+        CheckConstraint(
+            "estado_cuenta IN ('PENDIENTE_DOCUMENTOS','EN_REVISION','ACTIVO','RECHAZADO')",
+            name="chk_usuario_estado_cuenta",
+        ),
+        CheckConstraint(
+            "variante_tema IN ('OSCURO_ESTANDAR','OSCURO_SUAVE','OSCURO_ALTO_CONTRASTE',"
+            "'CLARO_ESTANDAR','CLARO_CALIDO','CLARO_ALTO_CONTRASTE')",
+            name="chk_usuario_variante_tema",
+        ),
         Index("idx_usuario_rol", "rol"),
         Index("idx_usuario_activo", "activo"),
+    )
+
+
+class DocumentoUsuarioModel(Base):
+    """Documentos de autorregistro (EP-AUTH-07) — dni_frente/dni_dorso/certificado_tecnico."""
+    __tablename__ = "documento_usuario"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    usuario_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(30), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    creado_en: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_documento_usuario_usuario", "usuario_id"),
+    )
+
+
+class MfaSesionModel(Base):
+    """Desafío MFA de 2 pasos (EP-AUTH-01/02, ADR-011) — persistido para sobrevivir
+    a un reinicio o a múltiples réplicas entre login() y mfa()."""
+    __tablename__ = "mfa_sesion"
+
+    token: Mapped[str] = mapped_column(String(36), primary_key=True)
+    usuario_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False)
+    expira_en: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    intentos_fallidos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    usado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requiere_codigo_real: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    codigo_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    creado_en: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_mfa_sesion_usuario", "usuario_id"),
     )
 
 

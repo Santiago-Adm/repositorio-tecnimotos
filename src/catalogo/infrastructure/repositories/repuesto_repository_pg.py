@@ -53,6 +53,7 @@ class RepuestoRepositoryPG:
         modelo: Optional[str] = None,
         año: Optional[int] = None,
         solo_disponibles: bool = True,
+        destacado: Optional[bool] = None,
     ) -> list[Repuesto]:
         conditions = [
             RepuestoModel.universo == universo.value,
@@ -64,6 +65,8 @@ class RepuestoRepositoryPG:
             )
         if año:
             conditions.append(RepuestoModel.año == año)
+        if destacado is not None:
+            conditions.append(RepuestoModel.destacado == destacado)
 
         stmt = select(RepuestoModel).where(and_(*conditions))
         result = await self._session.execute(stmt)
@@ -113,6 +116,7 @@ class RepuestoRepositoryPG:
         model.precio_venta = repuesto.precio_venta
         model.activo = repuesto.activo
         model.imagen_url = repuesto.imagen_url
+        model.destacado = repuesto.destacado
         model.eliminado_en = repuesto.eliminado_en
         model.updated_at = repuesto.updated_at
 
@@ -160,6 +164,7 @@ class RepuestoRepositoryPG:
             precio_venta=repuesto.precio_venta,
             activo=repuesto.activo,
             imagen_url=repuesto.imagen_url,
+            destacado=repuesto.destacado,
             eliminado_en=repuesto.eliminado_en,
         )
 
@@ -176,6 +181,7 @@ class RepuestoRepositoryPG:
             precio_venta=Decimal(str(model.precio_venta)),
             activo=model.activo,
             imagen_url=model.imagen_url,
+            destacado=model.destacado,
             eliminado_en=model.eliminado_en if isinstance(model.eliminado_en, datetime)
             else (datetime.fromisoformat(str(model.eliminado_en)) if model.eliminado_en else None),
         )

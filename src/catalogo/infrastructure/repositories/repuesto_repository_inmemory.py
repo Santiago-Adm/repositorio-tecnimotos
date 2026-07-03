@@ -40,6 +40,7 @@ class InMemoryRepuestoRepository:
         modelo: Optional[str] = None,
         año: Optional[int] = None,
         solo_disponibles: bool = True,
+        destacado: Optional[bool] = None,
     ) -> list[Repuesto]:
         results = []
         for r in self._store.values():
@@ -50,6 +51,8 @@ class InMemoryRepuestoRepository:
             if modelo and modelo.lower() not in r.modelo.lower():
                 continue
             if año and r.año != año:
+                continue
+            if destacado is not None and r.destacado != destacado:
                 continue
             results.append(r)
         return results

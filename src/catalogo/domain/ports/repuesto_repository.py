@@ -23,6 +23,7 @@ class RepuestoRepository(Protocol):
         modelo: Optional[str] = None,
         año: Optional[int] = None,
         solo_disponibles: bool = True,
+        destacado: Optional[bool] = None,
     ) -> list[Repuesto]: ...
 
     async def buscar_por_lista_codigos(

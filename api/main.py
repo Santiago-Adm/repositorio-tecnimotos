@@ -101,6 +101,11 @@ async def _lifespan(app: FastAPI):
         app.state.db_session_factory = create_session_factory(engine)
         app.state._pg_engine = engine
         logger.info("PostgreSQL conectado — repos PG activos")
+        try:
+            from src.shared.infrastructure.seed_usuarios import seed_usuarios_dev_pg
+            await seed_usuarios_dev_pg(app.state.db_session_factory)
+        except Exception as exc:
+            logger.warning("seed_usuarios_dev: no se pudo sembrar usuarios PG de desarrollo (%s)", exc)
     except Exception as exc:
         app.state.db_session_factory = None
         app.state._pg_engine = None

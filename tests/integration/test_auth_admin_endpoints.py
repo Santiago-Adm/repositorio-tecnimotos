@@ -385,7 +385,7 @@ async def test_adm05_cliente_no_puede_crear_usuarios(app_client):
 async def test_impersonate_superadmin_exito(app_client):
     """EP-ADM-12: SUPERADMIN suplanta a cliente activo → 200 y token de impersonación."""
     # Crear usuario destino
-    target_user = app_client.app.state.user_store.crear_usuario(
+    target_user = await app_client.app.state.user_store.crear_usuario(
         email="conductor_target@test.com",
         nombre="Conductor Target",
         rol="CLIENTE_CONDUCTOR",
@@ -417,7 +417,7 @@ async def test_impersonate_superadmin_exito(app_client):
 @pytest.mark.asyncio
 async def test_impersonate_no_superadmin_forbidden(app_client):
     """EP-ADM-12: Rol distinto de SUPERADMIN (ej: ADMINISTRADOR) → 403."""
-    target_user = app_client.app.state.user_store.crear_usuario(
+    target_user = await app_client.app.state.user_store.crear_usuario(
         email="conductor_forbidden@test.com",
         nombre="Conductor Forbidden",
         rol="CLIENTE_CONDUCTOR",
@@ -448,7 +448,7 @@ async def test_impersonate_usuario_inexistente_retorna_404(app_client):
 async def test_impersonate_target_superadmin_prohibido(app_client):
     """EP-ADM-12: Intentar suplantar a otro SUPERADMIN → 403."""
     # Crear otro superadmin
-    target_super = app_client.app.state.user_store.crear_usuario(
+    target_super = await app_client.app.state.user_store.crear_usuario(
         email="otro_super@test.com",
         nombre="Otro Super",
         rol="SUPERADMIN",
@@ -467,7 +467,7 @@ async def test_impersonate_target_superadmin_prohibido(app_client):
 @pytest.mark.asyncio
 async def test_impersonate_target_no_activo_prohibido(app_client):
     """EP-ADM-12: Intentar suplantar usuario con cuenta no activa → 403."""
-    target_user = app_client.app.state.user_store.crear_usuario(
+    target_user = await app_client.app.state.user_store.crear_usuario(
         email="conductor_inactivo@test.com",
         nombre="Conductor Inactivo",
         rol="CLIENTE_CONDUCTOR",

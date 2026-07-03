@@ -39,10 +39,19 @@ _REFRESH_MAX_AGE = 7 * 24 * 3600  # 7 días en segundos — 07 §2.1
 
 
 def _get_user_store(request: Request):
+    """PG cuando hay sesión de BD en el request (ADR-014); InMemory si no (tests)."""
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.usuario_repository_pg import UsuarioRepositoryPG
+        return UsuarioRepositoryPG(db)
     return request.app.state.user_store
 
 
 def _get_session_store(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.sesion_repository_pg import SesionRepositoryPG
+        return SesionRepositoryPG(db)
     return request.app.state.session_store
 
 
@@ -84,7 +93,7 @@ async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
     user_store = _get_user_store(request)
     session_store = _get_session_store(request)
 
-    user = user_store.verificar_credenciales(body.email, body.password)
+    user = await user_store.verificar_credenciales(body.email, body.password)
     if not user or not user.activo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -108,7 +117,7 @@ async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
 
     # Bloqueo temporal por intentos MFA fallidos (ADR-011) — mismo mensaje
     # genérico que credenciales inválidas para no confirmar existencia de cuenta.
-    if session_store.usuario_bloqueado_mfa(user.usuario_id):
+    if await user_store.usuario_bloqueado_mfa(user.usuario_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=error_response(
@@ -119,7 +128,7 @@ async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
         )
 
     requiere_codigo_real = user.rol in ROLES_MFA_CORREO_REQUERIDO
-    mfa_token, codigo_claro = session_store.crear_mfa_session(
+    mfa_token, codigo_claro = await session_store.crear_mfa_session(
         user.usuario_id, requiere_codigo_real=requiere_codigo_real
     )
 
@@ -162,9 +171,22 @@ async def mfa(request: Request, body: MfaRequest, response: Response) -> dict[st
     user_store = _get_user_store(request)
     private_key = _get_private_key(request)
 
-    resultado, usuario_id_auditoria = session_store.verificar_mfa(
-        body.mfa_session_token, body.totp_code
-    )
+    # Bloqueo cross-sesión (ADR-011/ADR-014) — chequeo previo: un mfa_session_token
+    # emitido justo antes de que el usuario quedara bloqueado en otra sesión no
+    # debe poder gastar el intento, aunque el código sea correcto.
+    usuario_id_token = await session_store.usuario_id_de_token(body.mfa_session_token)
+    if usuario_id_token and await user_store.usuario_bloqueado_mfa(usuario_id_token):
+        resultado, usuario_id_auditoria = "BLOQUEADO", usuario_id_token
+    else:
+        resultado, usuario_id_auditoria = await session_store.verificar_mfa(
+            body.mfa_session_token, body.totp_code
+        )
+        if resultado == "CODIGO_INCORRECTO" and usuario_id_auditoria:
+            if await user_store.registrar_fallo_mfa(usuario_id_auditoria):
+                resultado = "BLOQUEADO"
+        elif resultado == "EXITOSO" and usuario_id_auditoria:
+            await user_store.resetear_fallos_mfa(usuario_id_auditoria)
+
     ip = request.client.host if request.client else None
     if usuario_id_auditoria:
         db = getattr(request.state, "db", None)
@@ -181,7 +203,7 @@ async def mfa(request: Request, body: MfaRequest, response: Response) -> dict[st
         )
     usuario_id = usuario_id_auditoria
 
-    user = user_store.obtener_por_id(usuario_id)
+    user = await user_store.obtener_por_id(usuario_id)
     if not user or not user.activo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -201,7 +223,7 @@ async def mfa(request: Request, body: MfaRequest, response: Response) -> dict[st
         )
 
     access_token = issue_access_token(private_key, user.usuario_id, user.rol, user.token_version)
-    _session_id, refresh_raw = session_store.crear_sesion(user.usuario_id)
+    _session_id, refresh_raw = await session_store.crear_sesion(user.usuario_id)
 
     response.set_cookie(
         key=_REFRESH_COOKIE,
@@ -250,7 +272,7 @@ async def refresh(
     user_store = _get_user_store(request)
     private_key = _get_private_key(request)
 
-    resultado = session_store.rotar_refresh(refresh_token)
+    resultado = await session_store.rotar_refresh(refresh_token)
     if not resultado:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -261,7 +283,7 @@ async def refresh(
         )
 
     usuario_id, _session_id, nuevo_refresh = resultado
-    user = user_store.obtener_por_id(usuario_id)
+    user = await user_store.obtener_por_id(usuario_id)
     if not user or not user.activo or not private_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -308,7 +330,7 @@ async def logout(
     """Todos autenticados — revoca la sesión y elimina cookie (07 §2.3 Escenario 1)."""
     session_store = _get_session_store(request)
     if refresh_token:
-        session_store.revocar_por_refresh(refresh_token)
+        await session_store.revocar_por_refresh(refresh_token)
     response.delete_cookie(key=_REFRESH_COOKIE)
     return success_response(
         {"mensaje": "Sesión cerrada correctamente"},
@@ -362,7 +384,7 @@ async def bootstrap_superadmin(
         )
 
     user_store = _get_user_store(request)
-    if user_store.existe_superadmin():
+    if await user_store.existe_superadmin():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=error_response(
@@ -373,7 +395,7 @@ async def bootstrap_superadmin(
         )
 
     try:
-        user = user_store.crear_superadmin_bootstrap(
+        user = await user_store.crear_superadmin_bootstrap(
             email=body.email,
             nombre=body.nombre,
             password=body.password,
@@ -516,7 +538,7 @@ async def registro(
 
     user_store = _get_user_store(request)
     try:
-        user = user_store.crear_cuenta_pendiente(
+        user = await user_store.crear_cuenta_pendiente(
             email=email,
             nombre=nombre,
             rol=rol,

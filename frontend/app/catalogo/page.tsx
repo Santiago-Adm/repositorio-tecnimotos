@@ -22,7 +22,7 @@ const CATEGORIAS = [
   { value: 'suspension', label: 'Suspensión' },
 ]
 
-const PAGE_SIZE = 8
+const PAGE_SIZE = 12
 
 type Universo = 'mototaxi_3r' | 'mototaxi_4r' | 'motolineal'
 

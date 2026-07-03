@@ -795,7 +795,7 @@
           "catalogo"
         ],
         "summary": "EP-CAT-01: Buscar repuestos",
-        "description": "Búsqueda por universo, modelo, año y categoría. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).",
+        "description": "Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).\ndestacado=true filtra la selección editorial manual usada en la landing pública.",
         "operationId": "buscar_repuestos_v1_repuestos_get",
         "parameters": [
           {
@@ -852,6 +852,22 @@
                 }
               ],
               "title": "Categoria"
+            }
+          },
+          {
+            "name": "destacado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Destacado"
             }
           },
           {
@@ -3732,6 +3748,17 @@
               }
             ],
             "title": "Año"
+          },
+          "destacado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destacado"
           },
           "codigo": {
             "anyOf": [

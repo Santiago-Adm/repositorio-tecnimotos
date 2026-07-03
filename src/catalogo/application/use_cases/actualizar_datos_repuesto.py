@@ -30,6 +30,7 @@ class ActualizarDatosCommand:
     categoria: Optional[CategoriaRepuesto] = None
     modelo: Optional[str] = None
     año: Optional[int] = None
+    destacado: Optional[bool] = None
 
 
 class ActualizarDatosRepuestoUseCase:
@@ -57,4 +58,6 @@ class ActualizarDatosRepuestoUseCase:
             modelo=command.modelo,
             año=command.año,
         )
+        if command.destacado is not None:
+            repuesto.marcar_destacado(command.destacado)
         return await self._repo.actualizar(repuesto)

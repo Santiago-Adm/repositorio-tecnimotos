@@ -377,9 +377,34 @@ async def seed_nivel2_postgres(database_url: str) -> None:
           " · 8 vehículos · 1 mecánico · 8 OTs · 15 pedidos · 5 reabastecimientos")
 
 
-async def run_seed(level: int, module: str, env: str) -> None:
+async def seed_usuarios_reales_pg(database_url: str) -> None:
+    """Pieza D (ADR-014) — siembra los 11 usuarios reales de desarrollo (uno
+    por rol/sub-rol) directamente en PostgreSQL. Idempotente. Normalmente se
+    ejecuta solo al boot de la API (api/main.py), pero puede invocarse a mano
+    tras un `docker compose down -v` para no esperar al próximo arranque."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.shared.infrastructure.seed_usuarios import seed_usuarios_dev_pg
+
+    engine = create_async_engine(database_url, echo=False)
+    session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    await seed_usuarios_dev_pg(session_factory)
+    await engine.dispose()
+    print("  usuarios: 11 usuarios reales de desarrollo sembrados en PostgreSQL (ver levantar-sistema.md)")
+
+
+async def run_seed(level, module: str, env: str) -> None:
     print(f"Seed nivel {level} — módulo {module} — entorno {env}")
-    if level == 1:
+    if level == "usuarios":
+        import os
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "postgresql+asyncpg://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos",
+        )
+        await seed_usuarios_reales_pg(database_url)
+    elif level == 1:
         if module == "catalogo":
             await seed_catalogo_nivel1()
         elif module == "pedidos":
@@ -402,9 +427,15 @@ async def run_seed(level: int, module: str, env: str) -> None:
     print("Seed completado sin errores.")
 
 
+def _parse_level(value: str):
+    if value == "usuarios":
+        return value
+    return int(value)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed de datos de prueba")
-    parser.add_argument("--level", type=int, required=True, choices=[1, 2])
+    parser.add_argument("--level", type=_parse_level, required=True, choices=[1, 2, "usuarios"])
     parser.add_argument("--module", default="all",
                         help="Módulo a sembrar (nivel 1) o 'all' para nivel 2")
     parser.add_argument("--env", required=True, choices=["test", "staging", "dev"])

@@ -33,6 +33,7 @@ class RepuestoModel(Base):
     )  # cifrado Fernet (03 §5.7)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     imagen_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destacado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     eliminado_en: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -58,4 +59,5 @@ class RepuestoModel(Base):
         ),
         Index("idx_repuesto_busqueda", "universo", "modelo", "año", "codigo"),
         Index("idx_repuesto_activo", "activo", "universo"),
+        Index("idx_repuesto_destacado", "destacado", "universo"),
     )

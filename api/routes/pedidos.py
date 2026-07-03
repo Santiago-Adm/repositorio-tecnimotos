@@ -92,10 +92,18 @@ def _get_event_publisher(request: Request):
 
 
 def _get_catalogo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.pedidos.infrastructure.adapters.catalogo_adapter_pg import CatalogoAdapterPG
+        return CatalogoAdapterPG(db)
     return request.app.state.catalogo_adapter
 
 
 def _get_stock(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.pedidos.infrastructure.adapters.catalogo_adapter_pg import StockAdapterPG
+        return StockAdapterPG(db)
     return request.app.state.stock_adapter
 
 

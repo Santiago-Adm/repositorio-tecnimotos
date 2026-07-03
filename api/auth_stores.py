@@ -146,17 +146,53 @@ class SessionRecord:
 
 class InMemoryUserStore:
     """
-    Almacén en memoria de usuarios. En producción: tabla `usuario` PostgreSQL.
+    Almacén en memoria de usuarios. En producción: tabla `usuario` PostgreSQL
+    (ver UsuarioRepositoryPG, ADR-014).
     Crea un SUPERADMIN de prueba por defecto.
     """
+
+    MFA_LOCKOUT_INTENTOS = 5         # fallos consecutivos entre sesiones → bloqueo (ADR-011)
+    MFA_LOCKOUT_MINUTOS = 15         # duración del bloqueo temporal
 
     def __init__(self) -> None:
         self._by_id: dict[str, UsuarioRecord] = {}
         self._by_email: dict[str, str] = {}  # email → usuario_id
-        # Usuario de prueba pre-cargado
+        self._mfa_fallos_usuario: dict[str, int] = {}  # usuario_id → fallos consecutivos
+        self._mfa_bloqueo: dict[str, datetime] = {}    # usuario_id → bloqueado_hasta
+        # Usuarios de desarrollo pre-cargados — uno por rol interno y por segmento
+        # de cliente activo en el MVP (01 §Roles del sistema / §Segmentos activos).
+        # SUPERADMIN queda deliberadamente excluido: se crea una sola vez vía
+        # POST /v1/auth/bootstrap-superadmin (EP-AUTH-06), nunca sembrado aquí —
+        # sembrarlo dejaría el endpoint de bootstrap permanentemente inutilizable
+        # (existe_superadmin() sería True desde el primer boot).
+        # Tabla completa de credenciales: ver levantar-sistema.md.
         self._crear_usuario_interno(
             "user-admin-seed", "admin@tecnimotos.test",
             "Admin Seed", "ADMINISTRADOR", "admin123",
+        )
+        self._crear_usuario_interno(
+            "10000000-0000-0000-0000-000000000001", "venta@tecnimotos.test",
+            "Vendedor Seed", "VENDEDOR", "vendedor123",
+        )
+        self._crear_usuario_interno(
+            "10000000-0000-0000-0000-000000000002", "mecanico.master@tecnimotos.test",
+            "Mecanico Master Seed", "MECANICO_MASTER", "mecmaster123",
+        )
+        self._crear_usuario_interno(
+            "10000000-0000-0000-0000-000000000003", "mecanico.junior@tecnimotos.test",
+            "Mecanico Junior Seed", "MECANICO_JUNIOR", "mecjunior123",
+        )
+        self._crear_usuario_interno(
+            "20000000-0000-0000-0000-000000000001", "conductor@tecnimotos.test",
+            "Conductor Seed", "CLIENTE_CONDUCTOR", "conductor123",
+        )
+        self._crear_usuario_interno(
+            "20000000-0000-0000-0000-000000000002", "distrito@tecnimotos.test",
+            "Distrito Seed", "CLIENTE_DISTRITO", "distrito123",
+        )
+        self._crear_usuario_interno(
+            "20000000-0000-0000-0000-000000000003", "rural@tecnimotos.test",
+            "Rural Seed", "CLIENTE_RURAL", "rural123",
         )
 
     def _crear_usuario_interno(
@@ -174,7 +210,7 @@ class InMemoryUserStore:
         self._by_email[email.lower()] = uid
         return record
 
-    def crear_usuario(
+    async def crear_usuario(
         self, email: str, nombre: str, rol: str, password: str
     ) -> UsuarioRecord:
         if email.lower() in self._by_email:
@@ -182,28 +218,28 @@ class InMemoryUserStore:
         uid = str(uuid.uuid4())
         return self._crear_usuario_interno(uid, email, nombre, rol, password)
 
-    def buscar_por_email(self, email: str) -> Optional[UsuarioRecord]:
+    async def buscar_por_email(self, email: str) -> Optional[UsuarioRecord]:
         uid = self._by_email.get(email.lower())
         return self._by_id.get(uid) if uid else None
 
-    def verificar_credenciales(self, email: str, password: str) -> Optional[UsuarioRecord]:
+    async def verificar_credenciales(self, email: str, password: str) -> Optional[UsuarioRecord]:
         """Verifica email + password únicamente. No verifica activo ni estado_cuenta.
         El caller (EP-AUTH-01) decide qué hacer según el estado del usuario."""
-        user = self.buscar_por_email(email)
+        user = await self.buscar_por_email(email)
         if user and _verify_password(password, user.password_hash):
             return user
         return None
 
-    def obtener_por_id(self, uid: str) -> Optional[UsuarioRecord]:
+    async def obtener_por_id(self, uid: str) -> Optional[UsuarioRecord]:
         return self._by_id.get(uid)
 
-    def listar(self) -> list[UsuarioRecord]:
+    async def listar(self) -> list[UsuarioRecord]:
         return list(self._by_id.values())
 
-    def existe_superadmin(self) -> bool:
+    async def existe_superadmin(self) -> bool:
         return any(u.rol == "SUPERADMIN" for u in self._by_id.values())
 
-    def crear_superadmin_bootstrap(
+    async def crear_superadmin_bootstrap(
         self, email: str, nombre: str, password: str
     ) -> UsuarioRecord:
         """Crea el primer SUPERADMIN. Solo debe llamarse cuando existe_superadmin() es False."""
@@ -212,11 +248,11 @@ class InMemoryUserStore:
         uid = str(uuid.uuid4())
         return self._crear_usuario_interno(uid, email, nombre, "SUPERADMIN", password)
 
-    def incrementar_token_version(self, uid: str) -> None:
+    async def incrementar_token_version(self, uid: str) -> None:
         if uid in self._by_id:
             self._by_id[uid].token_version += 1
 
-    def crear_cuenta_pendiente(
+    async def crear_cuenta_pendiente(
         self,
         email: str,
         nombre: str,
@@ -242,33 +278,61 @@ class InMemoryUserStore:
         self._by_email[email.lower()] = uid
         return record
 
-    def listar_pendientes(self) -> list[UsuarioRecord]:
+    async def listar_pendientes(self) -> list[UsuarioRecord]:
         return [
             u for u in self._by_id.values()
             if u.estado_cuenta in (ESTADO_PENDIENTE, ESTADO_EN_REVISION)
         ]
 
-    def aprobar_cuenta(self, usuario_id: str) -> Optional[UsuarioRecord]:
+    async def aprobar_cuenta(self, usuario_id: str) -> Optional[UsuarioRecord]:
         user = self._by_id.get(usuario_id)
         if user:
             user.estado_cuenta = ESTADO_ACTIVO
         return user
 
-    def rechazar_cuenta(self, usuario_id: str, motivo: str) -> Optional[UsuarioRecord]:
+    async def rechazar_cuenta(self, usuario_id: str, motivo: str) -> Optional[UsuarioRecord]:
         user = self._by_id.get(usuario_id)
         if user:
             user.estado_cuenta = ESTADO_RECHAZADO
             user.motivo_rechazo = motivo
         return user
 
-    def obtener_todos(self) -> list[UsuarioRecord]:
+    async def obtener_todos(self) -> list[UsuarioRecord]:
         return list(self._by_id.values())
 
-    def actualizar_variante_tema(self, usuario_id: str, variante: str) -> Optional[UsuarioRecord]:
+    async def actualizar_variante_tema(self, usuario_id: str, variante: str) -> Optional[UsuarioRecord]:
         user = self._by_id.get(usuario_id)
         if user:
             user.variante_tema = variante
         return user
+
+    # ── Bloqueo temporal MFA cross-sesión (ADR-011 + ADR-014) ──
+    # Antes vivía en InMemorySessionStore — movido aquí para tener el mismo
+    # contrato que UsuarioRepositoryPG (misma responsabilidad: el store de
+    # usuarios, no el de sesiones, es dueño del estado de bloqueo).
+
+    async def usuario_bloqueado_mfa(self, usuario_id: str) -> Optional[datetime]:
+        """Retorna bloqueado_hasta si el usuario está en bloqueo temporal, None si no."""
+        hasta = self._mfa_bloqueo.get(usuario_id)
+        if hasta and datetime.now(timezone.utc) < hasta:
+            return hasta
+        return None
+
+    async def registrar_fallo_mfa(self, usuario_id: str) -> bool:
+        """Incrementa el contador de fallos cross-sesión. Retorna True si el
+        usuario queda bloqueado tras este fallo."""
+        fallos = self._mfa_fallos_usuario.get(usuario_id, 0) + 1
+        self._mfa_fallos_usuario[usuario_id] = fallos
+        if fallos >= self.MFA_LOCKOUT_INTENTOS:
+            self._mfa_bloqueo[usuario_id] = (
+                datetime.now(timezone.utc) + timedelta(minutes=self.MFA_LOCKOUT_MINUTOS)
+            )
+            return True
+        return False
+
+    async def resetear_fallos_mfa(self, usuario_id: str) -> None:
+        self._mfa_fallos_usuario.pop(usuario_id, None)
+        self._mfa_bloqueo.pop(usuario_id, None)
 
 
 class InMemorySessionStore:
@@ -281,26 +345,21 @@ class InMemorySessionStore:
     MFA_TTL_MINUTES = 5              # 07 §2.4
     REFRESH_TTL_DAYS = 7             # 07 §2.1
     MAX_MFA_INTENTOS = 5             # 07 §2.5 — intentos máx. dentro de una sesión MFA
-    MFA_LOCKOUT_INTENTOS = 5         # fallos consecutivos entre sesiones → bloqueo
-    MFA_LOCKOUT_MINUTOS = 15         # duración del bloqueo temporal (ADR-011)
 
     def __init__(self) -> None:
         self._mfa: dict[str, MfaSessionRecord] = {}   # mfa_token → record
         self._sessions: dict[str, SessionRecord] = {}  # session_id → record
         self._by_refresh_hash: dict[str, str] = {}    # hash → session_id
-        self._mfa_fallos_usuario: dict[str, int] = {}      # usuario_id → fallos consecutivos
-        self._mfa_bloqueo: dict[str, datetime] = {}         # usuario_id → bloqueado_hasta
 
     # ── MFA ──
 
-    def usuario_bloqueado_mfa(self, usuario_id: str) -> Optional[datetime]:
-        """Retorna bloqueado_hasta si el usuario está en bloqueo temporal, None si no."""
-        hasta = self._mfa_bloqueo.get(usuario_id)
-        if hasta and datetime.now(timezone.utc) < hasta:
-            return hasta
-        return None
+    async def usuario_id_de_token(self, mfa_token: str) -> Optional[str]:
+        """Peek sin mutar — permite al caller chequear bloqueo cross-sesión
+        (ADR-011/ADR-014) antes de gastar un intento contra el código."""
+        record = self._mfa.get(mfa_token)
+        return record.usuario_id if record else None
 
-    def crear_mfa_session(
+    async def crear_mfa_session(
         self, usuario_id: str, requiere_codigo_real: bool = False
     ) -> tuple[str, Optional[str]]:
         """
@@ -324,7 +383,7 @@ class InMemorySessionStore:
         )
         return token, codigo_claro
 
-    def verificar_mfa(self, mfa_token: str, totp_code: str) -> tuple[str, Optional[str]]:
+    async def verificar_mfa(self, mfa_token: str, totp_code: str) -> tuple[str, Optional[str]]:
         """
         Verifica token MFA y código.
         - requiere_codigo_real=True: compara contra el hash del código enviado por correo.
@@ -335,14 +394,14 @@ class InMemorySessionStore:
         token exista (para auditoría, R29), pero el caller solo debe emitir
         tokens de acceso cuando resultado == "EXITOSO".
         resultado ∈ EXITOSO · CODIGO_INCORRECTO · EXPIRADO · BLOQUEADO · TOKEN_INVALIDO.
+        No verifica bloqueo cross-sesión aquí — eso vive en
+        InMemoryUserStore.usuario_bloqueado_mfa (ADR-014), consultado por el
+        caller (api/routes/auth_routes.py::mfa()) antes de llamar a este método.
         """
         record = self._mfa.get(mfa_token)
         if not record:
             return "TOKEN_INVALIDO", None
 
-        bloqueo = self.usuario_bloqueado_mfa(record.usuario_id)
-        if bloqueo:
-            return "BLOQUEADO", record.usuario_id
         if record.usado:
             return "TOKEN_INVALIDO", record.usuario_id
         if datetime.now(timezone.utc) > record.expires_at:
@@ -357,17 +416,11 @@ class InMemorySessionStore:
 
         if not valido:
             record.intentos_fallidos += 1
-            fallos = self._mfa_fallos_usuario.get(record.usuario_id, 0) + 1
-            self._mfa_fallos_usuario[record.usuario_id] = fallos
-            if fallos >= self.MFA_LOCKOUT_INTENTOS:
-                self._mfa_bloqueo[record.usuario_id] = (
-                    datetime.now(timezone.utc) + timedelta(minutes=self.MFA_LOCKOUT_MINUTOS)
-                )
+            if record.intentos_fallidos >= self.MAX_MFA_INTENTOS:
                 return "BLOQUEADO", record.usuario_id
             return "CODIGO_INCORRECTO", record.usuario_id
 
         record.usado = True
-        self._mfa_fallos_usuario.pop(record.usuario_id, None)
         return "EXITOSO", record.usuario_id
 
     # ── Sesiones ──
@@ -375,7 +428,7 @@ class InMemorySessionStore:
     def _hash_refresh(self, token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    def crear_sesion(self, usuario_id: str) -> tuple[str, str]:
+    async def crear_sesion(self, usuario_id: str) -> tuple[str, str]:
         """Crea sesión y retorna (session_id, refresh_token_raw)."""
         session_id = str(uuid.uuid4())
         refresh_raw = str(uuid.uuid4())
@@ -389,7 +442,7 @@ class InMemorySessionStore:
         self._by_refresh_hash[refresh_hash] = session_id
         return session_id, refresh_raw
 
-    def rotar_refresh(self, refresh_raw: str) -> Optional[tuple[str, str, str]]:
+    async def rotar_refresh(self, refresh_raw: str) -> Optional[tuple[str, str, str]]:
         """
         Consume refresh_token y emite uno nuevo.
         Retorna (usuario_id, session_id, nuevo_refresh_raw) o None.
@@ -411,7 +464,7 @@ class InMemorySessionStore:
         self._by_refresh_hash[nuevo_hash] = session_id
         return record.usuario_id, session_id, nuevo_raw
 
-    def revocar_por_refresh(self, refresh_raw: str) -> bool:
+    async def revocar_por_refresh(self, refresh_raw: str) -> bool:
         """Revoca la sesión asociada al refresh_token. Retorna True si existía."""
         h = self._hash_refresh(refresh_raw)
         session_id = self._by_refresh_hash.pop(h, None)

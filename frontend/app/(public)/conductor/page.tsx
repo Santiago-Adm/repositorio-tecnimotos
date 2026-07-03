@@ -22,13 +22,13 @@ export default function LandingConductor() {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    apiClient.get<{ repuestos: Repuesto[] }>('/v1/repuestos?universo=mototaxi_3r')
+    apiClient.get<{ repuestos: Repuesto[] }>('/v1/repuestos?universo=mototaxi_3r&destacado=true&limit=12')
       .then(data => {
-        setRepuestos(data.repuestos.slice(0, 6))
+        setRepuestos(data.repuestos)
         setCargando(false)
       })
       .catch(() => {
-        // Fallback mockup data matching exactly 6 items for symmetric grid display
+        // Fallback mockup data — solo si la API falla por completo
         setRepuestos([
           {
             id: '1',

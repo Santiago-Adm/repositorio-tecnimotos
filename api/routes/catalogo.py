@@ -103,6 +103,7 @@ class RepuestoListItem(BaseModel):
     advertencia_instalacion: bool
     imagen_principal_url: Optional[str] = None
     imagen_url: Optional[str] = None
+    destacado: bool = False
 
 
 class ImagenResumen(BaseModel):
@@ -128,6 +129,7 @@ class RepuestoDetalle(BaseModel):
     opcion_notificacion: bool
     imagenes: list[ImagenResumen] = Field(default_factory=list)
     imagen_url: Optional[str] = None
+    destacado: bool = False
 
 
 class PrecioResponse(BaseModel):
@@ -168,6 +170,7 @@ class ActualizarDatosRequest(BaseModel):
     categoria: Optional[CategoriaRepuesto] = None
     modelo: Optional[str] = Field(default=None, min_length=1, max_length=100)
     año: Optional[int] = Field(default=None, ge=1990, le=2100)
+    destacado: Optional[bool] = None
     # Campos declarados para detectar su presencia — siempre deben ser None
     codigo: Optional[str] = Field(default=None, exclude=True)
     universo: Optional[str] = Field(default=None, exclude=True)
@@ -219,20 +222,22 @@ async def buscar_repuestos(
     modelo: Optional[str] = None,
     año: Optional[int] = None,
     categoria: Optional[CategoriaRepuesto] = None,
+    destacado: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: Optional[int] = Query(None, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Búsqueda por universo, modelo, año y categoría. NUNCA devuelve precio_venta.
+    """Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.
     Incluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.
     page/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad
     con consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /
-    sesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md)."""
+    sesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).
+    destacado=true filtra la selección editorial manual usada en la landing pública."""
     repo = _get_repo(request)
     imagen_repo = _get_imagen_repo(request)
     use_case = BuscarRepuestosUseCase(repo)
     listar_uc = ListarImagenesUseCase(imagen_repo)
     result = await use_case.execute(
-        BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año)
+        BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año, destacado=destacado)
     )
     repuestos_filtrados = result.repuestos
     if categoria is not None:
@@ -264,6 +269,7 @@ async def buscar_repuestos(
                 advertencia_instalacion=r.requiere_advertencia_instalacion(),
                 imagen_principal_url=principal,
                 imagen_url=r.imagen_url,
+                destacado=r.destacado,
             ).model_dump()
         )
     respuesta: dict[str, Any] = {"repuestos": items, "total": total_filtrado}
@@ -313,6 +319,7 @@ async def obtener_repuesto(request: Request, codigo: str) -> dict[str, Any]:
             for img in imagenes
         ],
         imagen_url=repuesto.imagen_url,
+        destacado=repuesto.destacado,
     )
     return success_response(item.model_dump(), request_id=get_request_id(request))
 
@@ -505,6 +512,7 @@ async def actualizar_datos_repuesto(
                 categoria=body.categoria,
                 modelo=body.modelo,
                 año=body.año,
+                destacado=body.destacado,
             )
         )
     except RepuestoNoEncontradoError:
@@ -543,6 +551,7 @@ async def actualizar_datos_repuesto(
             "categoria": repuesto.categoria.value,
             "modelo": repuesto.modelo,
             "año": repuesto.año,
+            "destacado": repuesto.destacado,
             "updated_at": repuesto.updated_at.isoformat(),
         },
         request_id=get_request_id(request),

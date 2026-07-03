@@ -41,6 +41,10 @@ def _get_taller_repo(request: Request):
 
 
 def _get_user_store(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.usuario_repository_pg import UsuarioRepositoryPG
+        return UsuarioRepositoryPG(db)
     return request.app.state.user_store
 
 
@@ -284,7 +288,7 @@ async def crear_usuario(
 
     user_store = _get_user_store(request)
     try:
-        user = user_store.crear_usuario(
+        user = await user_store.crear_usuario(
             email=body.email,
             nombre=body.nombre,
             rol=body.rol,
@@ -325,7 +329,7 @@ async def listar_usuarios_pendientes(
 ) -> dict[str, Any]:
     """SUPERADMIN · ADMINISTRADOR — lista cuentas en PENDIENTE_DOCUMENTOS o EN_REVISION."""
     user_store = _get_user_store(request)
-    pendientes = user_store.listar_pendientes()
+    pendientes = await user_store.listar_pendientes()
     return success_response(
         {
             "total": len(pendientes),
@@ -361,7 +365,7 @@ async def aprobar_cuenta(
 ) -> dict[str, Any]:
     """SUPERADMIN · ADMINISTRADOR — pasa cuenta a ACTIVO."""
     user_store = _get_user_store(request)
-    user = user_store.aprobar_cuenta(usuario_id)
+    user = await user_store.aprobar_cuenta(usuario_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -401,7 +405,7 @@ async def rechazar_cuenta(
 ) -> dict[str, Any]:
     """SUPERADMIN · ADMINISTRADOR — pasa cuenta a RECHAZADO con motivo."""
     user_store = _get_user_store(request)
-    user = user_store.rechazar_cuenta(usuario_id, body.motivo_rechazo)
+    user = await user_store.rechazar_cuenta(usuario_id, body.motivo_rechazo)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -441,7 +445,7 @@ async def listar_usuarios(
     Filtros opcionales: rol (exacto) y estado (exacto).
     """
     user_store = _get_user_store(request)
-    todos: list = user_store.listar()
+    todos: list = await user_store.listar()
     if rol:
         todos = [u for u in todos if u.rol == rol]
     if estado:
@@ -754,7 +758,7 @@ async def impersonate(
     if not target_user:
         try:
             user_store = _get_user_store(request)
-            target_user = user_store.obtener_por_id(body.user_id)
+            target_user = await user_store.obtener_por_id(body.user_id)
         except Exception:
             pass
 

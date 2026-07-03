@@ -17,6 +17,7 @@ class BuscarRepuestosQuery:
     modelo: Optional[str] = None
     año: Optional[int] = None
     solo_disponibles: bool = True
+    destacado: Optional[bool] = None
 
 
 @dataclass
@@ -40,6 +41,7 @@ class BuscarRepuestosUseCase:
             modelo=query.modelo,
             año=query.año,
             solo_disponibles=query.solo_disponibles,
+            destacado=query.destacado,
         )
         return BuscarRepuestosResult(repuestos=repuestos, total=len(repuestos))
 

@@ -16,15 +16,16 @@ interface Repuesto {
   imagen_principal_url?: string | null
 }
 
-const MAX_ITEMS = 6
+const MAX_ITEMS = 12
 
 interface Props {
-  universo: 'mototaxi' | 'motolineal'
+  universo: 'motolineal' | 'mototaxi_3r' | 'mototaxi_4r'
   /** Payload mínimo S4/rural (10 §2.3/§6.6) — sin imagen, sin consulta de precio. */
   minimal?: boolean
 }
 
 // EP-CAT-01 — sin auth, universo obligatorio (verificado contra api/routes/catalogo.py).
+// destacado=true + limit filtran/paginan server-side — nunca traer el universo completo.
 export default function RepuestosDestacados({ universo, minimal = false }: Props) {
   const [repuestos, setRepuestos] = useState<Repuesto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,8 +34,10 @@ export default function RepuestosDestacados({ universo, minimal = false }: Props
     setError(null)
     setRepuestos(null)
     try {
-      const data = await apiClient.get<{ repuestos: Repuesto[] }>(`/v1/repuestos?universo=${universo}`)
-      setRepuestos(data.repuestos.slice(0, MAX_ITEMS))
+      const data = await apiClient.get<{ repuestos: Repuesto[] }>(
+        `/v1/repuestos?universo=${universo}&destacado=true&limit=${MAX_ITEMS}`
+      )
+      setRepuestos(data.repuestos)
     } catch (err) {
       setError(err instanceof ApiCallError ? err.code : 'ERROR_INTERNO')
     }

@@ -701,7 +701,7 @@ export default function SuperadminDashboard() {
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-body ${
                                   u.estado_cuenta === 'ACTIVO' ? 'bg-teal/20 text-teal' :
                                   u.estado_cuenta === 'PENDIENTE_DOCUMENTOS' ? 'bg-amber-500/20 text-amber-400' :
-                                  u.estado_cuenta === 'EN_REVISION' ? 'bg-purple-500/20 text-purple-400' :
+                                  u.estado_cuenta === 'EN_REVISION' ? 'bg-electric/20 text-electric' :
                                   'bg-red-500/20 text-red-400'
                                 }`}>
                                   {ESTADO_CUENTA_LABELS[u.estado_cuenta] || u.estado_cuenta}

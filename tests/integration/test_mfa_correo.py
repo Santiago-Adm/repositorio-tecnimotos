@@ -16,7 +16,7 @@ from src.shared.infrastructure.email_sender import EmailSendError
 
 async def _crear_usuario(app_client, rol: str, email: str, password: str = "clave12345"):
     user_store = app_client.app.state.user_store
-    return user_store.crear_usuario(email, f"Usuario {rol}", rol, password)
+    return await user_store.crear_usuario(email, f"Usuario {rol}", rol, password)
 
 
 async def _login_capturando_codigo(client, email: str, password: str) -> tuple[str, str | None]:
@@ -112,10 +112,10 @@ class TestMfaSoloParaRolesInternosAltoPrivilegio:
 
 class TestBloqueoTemporal:
     async def test_bloqueo_tras_intentos_fallidos_consecutivos(self, app_client):
-        session_store = app_client.app.state.session_store
+        user_store = app_client.app.state.user_store
         await _crear_usuario(app_client, "ADMINISTRADOR", "bloqueo@tecnimotos.test")
 
-        for _ in range(session_store.MFA_LOCKOUT_INTENTOS):
+        for _ in range(user_store.MFA_LOCKOUT_INTENTOS):
             mfa_token, codigo = await _login_capturando_codigo(
                 app_client, "bloqueo@tecnimotos.test", "clave12345"
             )

@@ -74,6 +74,10 @@ def _get_event_publisher(request: Request):
 
 
 def _get_catalogo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.taller.infrastructure.adapters.catalogo_taller_adapter_pg import CatalogoTallerAdapterPG
+        return CatalogoTallerAdapterPG(db)
     return request.app.state.catalogo_taller_adapter
 
 

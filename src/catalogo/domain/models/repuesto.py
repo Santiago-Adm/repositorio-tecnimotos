@@ -82,6 +82,7 @@ class Repuesto:
     eliminado_en: Optional[datetime] = None
     historial_precio: list[HistorialPrecio] = field(default_factory=list)
     imagen_url: Optional[str] = None
+    destacado: bool = False
 
     def __post_init__(self) -> None:
         if self.precio_venta <= Decimal("0"):
@@ -133,6 +134,11 @@ class Repuesto:
     def establecer_imagen(self, url: str) -> None:
         """Reemplaza la imagen del repuesto (convención de key fija — siempre 1 imagen)."""
         self.imagen_url = url
+        self.updated_at = datetime.now(timezone.utc)
+
+    def marcar_destacado(self, valor: bool) -> None:
+        """Selección editorial manual para la landing pública — nunca automática."""
+        self.destacado = valor
         self.updated_at = datetime.now(timezone.utc)
 
     def dar_de_baja(self, motivo: str) -> None:
