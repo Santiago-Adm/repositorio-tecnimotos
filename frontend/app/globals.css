@@ -7,7 +7,58 @@
   --color-electric: #8B5CF6;
   --color-surface-dark: #0F172A;
   --color-surface-light: #F8FAFC;
+
+  /* Font fallbacks for offline compilation */
+  --font-display: 'Quicksand', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: 'Nunito', 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
+
+/*
+ * §3.7.2 — sistema de temas (EP-USR-01): 6 variantes por superficie de rol
+ *
+ * bg-surface-dark está compilado como hex estático por Tailwind, así que
+ * se sobreescribe con selector descendiente, no con CSS variable.
+ * Las clases slate-* son igualmente estáticas — se invierten aquí para CLARO_*.
+ * bg-surface-dark/80 (LoadingIndicator) no se sobreescribe: overlay oscuro
+ * temporal es aceptable y preserva legibilidad del spinner.
+ */
+
+/* --- Variantes oscuras (roles internos): solo el fondo principal --- */
+[data-theme="OSCURO_SUAVE"]          .bg-surface-dark { background-color: #1E293B; }
+[data-theme="OSCURO_ALTO_CONTRASTE"] .bg-surface-dark { background-color: #020617; }
+
+/* --- Variantes claras (CLIENTE_*): superficie real invertida --- */
+/* §3.3.1 surface-light como base; CLARO_CALIDO evita blanco puro (PDF marca); */
+/* CLARO_ALTO_CONTRASTE usa blanco puro para máx contraste en exteriores §6.5  */
+[data-theme="CLARO_ESTANDAR"]       .bg-surface-dark { background-color: #F1F5F9; }
+[data-theme="CLARO_CALIDO"]         .bg-surface-dark { background-color: #FFFBF0; }
+[data-theme="CLARO_ALTO_CONTRASTE"] .bg-surface-dark { background-color: #FFFFFF; }
+
+/* Inversión completa de tokens Tailwind estáticos bajo cualquier variante clara */
+[data-theme^="CLARO_"] .bg-slate-900         { background-color: #E2E8F0; }
+[data-theme^="CLARO_"] .bg-slate-900\/90     { background-color: rgb(226 232 240 / 0.9); }
+[data-theme^="CLARO_"] .bg-slate-800         { background-color: #FFFFFF; }
+[data-theme^="CLARO_"] .text-slate-100       { color: #1E293B; }
+[data-theme^="CLARO_"] .text-slate-200       { color: #334155; }
+[data-theme^="CLARO_"] .text-slate-300       { color: #475569; }
+[data-theme^="CLARO_"] .text-slate-400       { color: #64748B; }
+[data-theme^="CLARO_"] .text-slate-500       { color: #94A3B8; }
+[data-theme^="CLARO_"] .text-red-400         { color: #DC2626; }
+[data-theme^="CLARO_"] .border-slate-800     { border-color: #CBD5E1; }
+[data-theme^="CLARO_"] .border-slate-700     { border-color: #94A3B8; }
+[data-theme^="CLARO_"] .border-slate-600     { border-color: #64748B; }
+[data-theme^="CLARO_"] .hover\:bg-slate-800:hover     { background-color: #E2E8F0; }
+[data-theme^="CLARO_"] .hover\:text-slate-100:hover   { color: #1E293B; }
+[data-theme^="CLARO_"] .hover\:text-slate-200:hover   { color: #334155; }
+[data-theme^="CLARO_"] .hover\:border-slate-600:hover { border-color: #64748B; }
+
+/* Alto contraste claro: texto más oscuro para legibilidad exterior (§6.5 CLIENTE_RURAL) */
+[data-theme="CLARO_ALTO_CONTRASTE"] .text-slate-100   { color: #0F172A; }
+[data-theme="CLARO_ALTO_CONTRASTE"] .text-slate-200   { color: #1E293B; }
+[data-theme="CLARO_ALTO_CONTRASTE"] .text-slate-300   { color: #1E293B; }
+[data-theme="CLARO_ALTO_CONTRASTE"] .border-slate-700 { border-color: #64748B; }
+[data-theme="CLARO_ALTO_CONTRASTE"] .hover\:bg-slate-800:hover { background-color: #CBD5E1; }
 
 @layer base {
   body {

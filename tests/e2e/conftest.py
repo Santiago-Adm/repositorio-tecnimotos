@@ -71,7 +71,7 @@ async def e2e_app():
         nombre="Filtro aceite",
         categoria=CategoriaRepuesto.MOTOR,
         precio_venta=decimal.Decimal("45.00"),
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Universal",
         año=2020,
     )
@@ -114,7 +114,7 @@ async def e2e_app():
         precio_venta=decimal.Decimal("45.00"),
         nombre="Filtro aceite",
         categoria="motor",
-        universo="mototaxi",
+        universo="mototaxi_3r",
         activo=True,
     ))
     catalogo_adapter.agregar_repuesto(RepuestoInfo(

@@ -20,7 +20,7 @@ class TestPrecioVigenteResponse:
             precio_venta=Decimal("45.00"),
             nombre="Filtro",
             categoria="motor",
-            universo="mototaxi",
+            universo="mototaxi_3r",
             activo=True,
         )
         assert resp.codigo == "REP-001"
@@ -34,7 +34,7 @@ class TestPrecioVigenteResponse:
             precio_venta=Decimal("10.00"),
             nombre="Test",
             categoria="motor",
-            universo="mototaxi",
+            universo="mototaxi_3r",
             activo=True,
         )
         try:

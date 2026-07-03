@@ -259,6 +259,9 @@ class OrdenTrabajo:
     cliente_aprobo_lista: bool = False
     costo_mano_obra: Optional[Decimal] = None
     monto_estimado: Decimal = Decimal("0")
+    prueba_ruta_completada: bool = False
+    observaciones_prueba_ruta: Optional[str] = None
+    salud_resultado: Optional[int] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -362,6 +365,23 @@ class OrdenTrabajo:
             raise DomainError("costo_mano_obra no puede ser negativo")
         self.costo_mano_obra = costo_mano_obra
         self.avanzar_estado(EstadoOrdenTrabajo.REVISION_FINAL)
+
+    def registrar_prueba_ruta(
+        self, observaciones: Optional[str], salud_asignada: int
+    ) -> None:
+        """EP-TAL-13: registra resultado de la prueba de ruta. Solo cuando OT CERRADA.
+        Sin observaciones → salud_asignada debe ser 100 (el caller lo garantiza).
+        Con observaciones → mecánico declara el valor; puede ser < 100."""
+        if self.estado != EstadoOrdenTrabajo.CERRADA:
+            raise DomainError(
+                f"Solo se puede registrar prueba de ruta en OT CERRADA, estado: {self.estado.value}"
+            )
+        if not (0 <= salud_asignada <= 100):
+            raise DomainError("salud_asignada debe estar entre 0 y 100")
+        self.prueba_ruta_completada = True
+        self.observaciones_prueba_ruta = observaciones
+        self.salud_resultado = salud_asignada
+        self.updated_at = datetime.now(timezone.utc)
 
     def cerrar(self) -> None:
         """Cierre tras cobro confirmado (HU-INT-04)."""

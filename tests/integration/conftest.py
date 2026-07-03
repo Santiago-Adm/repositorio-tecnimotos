@@ -75,7 +75,7 @@ async def pedidos_client(app_client):
 
     catalogo_adapter.agregar_repuesto(RepuestoInfo(
         repuesto_id="rp-001", codigo="REP-001", precio_venta=decimal.Decimal("45.00"),
-        nombre="Filtro aceite", categoria="motor", universo="mototaxi", activo=True,
+        nombre="Filtro aceite", categoria="motor", universo="mototaxi_3r", activo=True,
     ))
     catalogo_adapter.agregar_repuesto(RepuestoInfo(
         repuesto_id="rp-002", codigo="REP-002", precio_venta=decimal.Decimal("30.00"),
@@ -83,7 +83,7 @@ async def pedidos_client(app_client):
     ))
     catalogo_adapter.agregar_repuesto(RepuestoInfo(
         repuesto_id="rp-baja", codigo="REP-BAJA", precio_venta=decimal.Decimal("20.00"),
-        nombre="Repuesto baja", categoria="otro", universo="mototaxi", activo=False,
+        nombre="Repuesto baja", categoria="otro", universo="mototaxi_3r", activo=False,
     ))
     stock_adapter.establecer_stock("rp-001", 20)
     stock_adapter.establecer_stock("rp-002", 10)

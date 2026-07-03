@@ -55,7 +55,7 @@
           "auth"
         ],
         "summary": "EP-AUTH-02: Verificar MFA y obtener tokens",
-        "description": "Semi-público — requiere mfa_session_token válido (TTL 5 min — 07 §2.4).\nEn InMemory acepta cualquier código 6 dígitos.",
+        "description": "Semi-público — requiere mfa_session_token válido (TTL 5 min — 07 §2.4).\nSUPERADMIN/ADMINISTRADOR: código real enviado por correo (ADR-011).\nResto de roles: acepta cualquier código 6 dígitos (paso \"de forma\").\nRate limit: 20 req/min/IP vía RateLimiterMiddleware en /v1/auth/* (R31).\nCada intento se audita en mfa_intento (R29).",
         "operationId": "mfa_v1_auth_mfa_post",
         "requestBody": {
           "content": {
@@ -180,6 +180,94 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Logout V1 Auth Logout Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/bootstrap-superadmin": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-06: Crear el primer SUPERADMIN",
+        "description": "Público — sin token JWT.\nFunciona SOLO si no existe ningún SUPERADMIN en la base de datos.\nTras crear el primero, cualquier llamada posterior se rechaza permanentemente\n(la condición \"cero SUPERADMIN\" deja de cumplirse).\nLa clave de bootstrap proviene exclusivamente de SUPERADMIN_BOOTSTRAP_KEY (env).\nNunca se loguea la clave en texto plano.",
+        "operationId": "bootstrap_superadmin_v1_auth_bootstrap_superadmin_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapSuperadminRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Bootstrap Superadmin V1 Auth Bootstrap Superadmin Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/registro": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "EP-AUTH-07: Autorregistro público con documentos",
+        "description": "Público — sin token.\nCrea cuenta en PENDIENTE_DOCUMENTOS. No puede declarar ADMINISTRADOR/SUPERADMIN.\nMECANICO_MASTER/JUNIOR requieren certificado_tecnico adicional.\nPublica usuario.registro_pendiente para notificar al ADMINISTRADOR.",
+        "operationId": "registro_v1_auth_registro_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_registro_v1_auth_registro_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Registro V1 Auth Registro Post"
                 }
               }
             }
@@ -376,14 +464,14 @@
         "description": "SUPERADMIN · ADMINISTRADOR — crea usuario.\nNo puede crear SUPERADMIN (03 §6.6).",
         "operationId": "crear_usuario_v1_admin_usuarios_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CrearUsuarioRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -391,9 +479,299 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Crear Usuario V1 Admin Usuarios Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-09: Listado general de usuarios",
+        "description": "SUPERADMIN · ADMINISTRADOR — lista todos los usuarios (cualquier estado_cuenta).\nDiferente de EP-ADM-06 que solo lista PENDIENTE_DOCUMENTOS/EN_REVISION.\nFiltros opcionales: rol (exacto) y estado (exacto).",
+        "operationId": "listar_usuarios_v1_admin_usuarios_get",
+        "parameters": [
+          {
+            "name": "rol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por rol exacto",
+              "title": "Rol"
+            },
+            "description": "Filtrar por rol exacto"
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado_cuenta",
+              "title": "Estado"
+            },
+            "description": "Filtrar por estado_cuenta"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Usuarios V1 Admin Usuarios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios/pendientes": {
+      "get": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-06: Listar cuentas pendientes de aprobación",
+        "description": "SUPERADMIN · ADMINISTRADOR — lista cuentas en PENDIENTE_DOCUMENTOS o EN_REVISION.",
+        "operationId": "listar_usuarios_pendientes_v1_admin_usuarios_pendientes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
                   "additionalProperties": true,
                   "type": "object",
-                  "title": "Response Crear Usuario V1 Admin Usuarios Post"
+                  "title": "Response Listar Usuarios Pendientes V1 Admin Usuarios Pendientes Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios/{usuario_id}/aprobar": {
+      "post": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-07: Aprobar cuenta pendiente",
+        "description": "SUPERADMIN · ADMINISTRADOR — pasa cuenta a ACTIVO.",
+        "operationId": "aprobar_cuenta_v1_admin_usuarios__usuario_id__aprobar_post",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Aprobar Cuenta V1 Admin Usuarios  Usuario Id  Aprobar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios/{usuario_id}/rechazar": {
+      "post": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-08: Rechazar cuenta pendiente",
+        "description": "SUPERADMIN · ADMINISTRADOR — pasa cuenta a RECHAZADO con motivo.",
+        "operationId": "rechazar_cuenta_v1_admin_usuarios__usuario_id__rechazar_post",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RechazarCuentaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Rechazar Cuenta V1 Admin Usuarios  Usuario Id  Rechazar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/metricas-negocio": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-10: Métricas de negocio agregadas",
+        "description": "SUPERADMIN · ADMINISTRADOR — agrega métricas operativas del negocio.\n\nPeríodo de comprobantes: mes calendario actual (día 1 del mes a hoy).\nElección documentada: el flujo de comprobantes es mensual (ciclo de\nfacturación) y coincide con el período que el equipo administrativo\nrevisa en reuniones mensuales de cierre.",
+        "operationId": "metricas_negocio_v1_admin_metricas_negocio_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Metricas Negocio V1 Admin Metricas Negocio Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/metricas": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-11: Métricas operacionales agregadas",
+        "description": "SUPERADMIN · ADMINISTRADOR — calcula y expone las métricas operacionales.\nRotación de stock, margen promedio y tasa de conversión.",
+        "operationId": "metricas_operacionales_v1_admin_metricas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Metricas Operacionales V1 Admin Metricas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/impersonate": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-12: Suplantar identidad de un usuario (Impersonate)",
+        "description": "SUPERADMIN — Emite un token JWT efímero (máx 15 minutos) para suplantar a otro usuario.\nRegistra auditoría estructurada en sys.stdout.",
+        "operationId": "impersonate_v1_admin_impersonate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpersonateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Impersonate V1 Admin Impersonate Post"
                 }
               }
             }
@@ -417,7 +795,7 @@
           "catalogo"
         ],
         "summary": "EP-CAT-01: Buscar repuestos",
-        "description": "Búsqueda por universo, modelo y año. NUNCA devuelve precio_venta.",
+        "description": "Búsqueda por universo, modelo, año y categoría. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).",
         "operationId": "buscar_repuestos_v1_repuestos_get",
         "parameters": [
           {
@@ -458,6 +836,51 @@
                 }
               ],
               "title": "Año"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CategoriaRepuesto"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 200,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
             }
           }
         ],
@@ -535,7 +958,7 @@
           "catalogo"
         ],
         "summary": "EP-CAT-02: Obtener repuesto por código",
-        "description": "Obtiene repuesto por código. NUNCA devuelve precio_venta.",
+        "description": "Obtiene repuesto por código. NUNCA devuelve precio_venta.\nIncluye lista de imágenes ordenadas por campo orden — extensión aditiva.",
         "operationId": "obtener_repuesto_v1_repuestos__codigo__get",
         "parameters": [
           {
@@ -557,6 +980,59 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Obtener Repuesto V1 Repuestos  Codigo  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-10: Actualizar datos descriptivos de repuesto",
+        "description": "Corrige nombre, descripcion, categoria, modelo o año.\nNUNCA toca precio_venta ni dispara repuesto.precio_actualizado.\nSolo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "actualizar_datos_repuesto_v1_repuestos__codigo__patch",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarDatosRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Datos Repuesto V1 Repuestos  Codigo  Patch"
                 }
               }
             }
@@ -817,6 +1293,287 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Consultar Lista Codigos V1 Catalogo Repuestos Consulta Lista Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/imagenes": {
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-08: Subir imagen a repuesto",
+        "description": "Solo ADMINISTRADOR y SUPERADMIN.\nTipos permitidos: image/jpeg, image/png, image/webp.\nLímite: 5 MB por imagen (decisión sesión 2026-06-27).\nLa primera imagen subida (orden=0) se convierte automáticamente en la principal.",
+        "operationId": "subir_imagen_repuesto_v1_repuestos__codigo__imagenes_post",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_subir_imagen_repuesto_v1_repuestos__codigo__imagenes_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Subir Imagen Repuesto V1 Repuestos  Codigo  Imagenes Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/imagenes/{imagen_id}": {
+      "delete": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-09: Eliminar imagen de repuesto",
+        "description": "Solo ADMINISTRADOR y SUPERADMIN.",
+        "operationId": "eliminar_imagen_repuesto_v1_repuestos__codigo__imagenes__imagen_id__delete",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          },
+          {
+            "name": "imagen_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Imagen Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Eliminar Imagen Repuesto V1 Repuestos  Codigo  Imagenes  Imagen Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-11: Reemplazar imagen de repuesto",
+        "description": "Solo ADMINISTRADOR y SUPERADMIN.\nMantiene el mismo id, orden y repuesto_id — solo cambia la referencia en R2.\nTipos permitidos: image/jpeg, image/png, image/webp. Límite: 5 MB.\nOrden de operaciones: subir nueva → actualizar registro → eliminar objeto anterior.",
+        "operationId": "reemplazar_imagen_repuesto_v1_repuestos__codigo__imagenes__imagen_id__put",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          },
+          {
+            "name": "imagen_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Imagen Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_reemplazar_imagen_repuesto_v1_repuestos__codigo__imagenes__imagen_id__put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Reemplazar Imagen Repuesto V1 Repuestos  Codigo  Imagenes  Imagen Id  Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/imagenes/orden": {
+      "put": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-12: Reordenar imágenes de repuesto",
+        "description": "Solo ADMINISTRADOR y SUPERADMIN.\nRecibe la lista completa de imagen_ids en el orden deseado.\nValidación estricta: debe contener exactamente los IDs existentes del repuesto\n— ni más, ni menos, ni IDs de otro repuesto.\nSi no coincide, responde 422 con el detalle exacto de la discrepancia.",
+        "operationId": "reordenar_imagenes_repuesto_v1_repuestos__codigo__imagenes_orden_put",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReordenarImagenesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Reordenar Imagenes Repuesto V1 Repuestos  Codigo  Imagenes Orden Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/{codigo}/imagen": {
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "Subir/reemplazar la imagen de catálogo de un repuesto",
+        "description": "Solo ADMINISTRADOR y SUPERADMIN. Backend-only (sin UI — queda para sesión\nde frontend aparte). Tipos permitidos: image/jpeg, image/png, image/webp.\nLímite: 5 MB. Reemplaza la imagen anterior (key fija, no se acumulan).",
+        "operationId": "subir_imagen_unica_repuesto_v1_repuestos__codigo__imagen_post",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_subir_imagen_unica_repuesto_v1_repuestos__codigo__imagen_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Subir Imagen Unica Repuesto V1 Repuestos  Codigo  Imagen Post"
                 }
               }
             }
@@ -1963,6 +2720,95 @@
         }
       }
     },
+    "/v1/pedidos/plan-mantenimiento": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-18: Activar plan de mantenimiento",
+        "description": "CLIENTE_CONDUCTOR · CLIENTE_RURAL.\nActiva un plan de mantenimiento preventivo con ciclo de 30 días.\nUn vehículo solo puede tener un plan ACTIVO a la vez.",
+        "operationId": "activar_plan_mantenimiento_v1_pedidos_plan_mantenimiento_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivarPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Activar Plan Mantenimiento V1 Pedidos Plan Mantenimiento Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/plan-mantenimiento/{plan_id}/cancelar": {
+      "post": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-19: Cancelar plan de mantenimiento",
+        "description": "CLIENTE_CONDUCTOR · CLIENTE_RURAL.\nCancela el plan; los recordatorios futuros se detienen inmediatamente.\nSolo el propietario del plan puede cancelarlo.",
+        "operationId": "cancelar_plan_mantenimiento_v1_pedidos_plan_mantenimiento__plan_id__cancelar_post",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plan Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancelar Plan Mantenimiento V1 Pedidos Plan Mantenimiento  Plan Id  Cancelar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/ordenes-trabajo": {
       "post": {
         "tags": [
@@ -2485,6 +3331,61 @@
         }
       }
     },
+    "/v1/ordenes-trabajo/{ot_id}/prueba-ruta": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-13: Registrar prueba de ruta post-reparación",
+        "description": "MECANICO_MASTER · ADMINISTRADOR · SUPERADMIN.\nRegistra el resultado de la prueba de ruta tras cerrar la OT.\nRequiere OT en estado CERRADA.\n- Sin observaciones: salud_estimada del vehículo = 100 automático.\n- Con observaciones: mecánico debe declarar salud_declarada (< 100 por convención).\nEl valor queda visible para el cliente en EP-TAL-12.",
+        "operationId": "registrar_prueba_ruta_v1_ordenes_trabajo__ot_id__prueba_ruta_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PruebaRutaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Registrar Prueba Ruta V1 Ordenes Trabajo  Ot Id  Prueba Ruta Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/ordenes-trabajo/{ot_id}": {
       "get": {
         "tags": [
@@ -2575,6 +3476,116 @@
         }
       }
     },
+    "/v1/soporte/reportes": {
+      "get": {
+        "tags": [
+          "soporte"
+        ],
+        "summary": "EP-SOP-02: Listar reportes activos",
+        "description": "SUPERADMIN: lista reportes ABIERTO/EN_INVESTIGACION para vincular a impersonación.",
+        "operationId": "listar_reportes_soporte_v1_soporte_reportes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Reportes Soporte V1 Soporte Reportes Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "soporte"
+        ],
+        "summary": "EP-SOP-01: Crear reporte de soporte",
+        "description": "Cualquier rol autenticado crea un reporte sobre un problema propio.",
+        "operationId": "crear_reporte_soporte_v1_soporte_reportes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReporteSoporteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Reporte Soporte V1 Soporte Reportes Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usuarios/me/tema": {
+      "patch": {
+        "tags": [
+          "usuarios"
+        ],
+        "summary": "EP-USR-01: Actualizar preferencia de tema del usuario autenticado",
+        "description": "Cualquier usuario autenticado — cambia su propia variante_tema.\nRoles internos (SUPERADMIN, ADMINISTRADOR, VENDEDOR, MECANICO_*): solo OSCURO_*.\nRoles CLIENTE_*: solo CLARO_*.\nCruce de superficie → VALIDACION_FALLIDA 422.",
+        "operationId": "actualizar_tema_v1_usuarios_me_tema_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarTemaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Actualizar Tema V1 Usuarios Me Tema Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -2592,116 +3603,6 @@
             }
           }
         }
-      }
-    },
-    "/v1/soporte/reportes": {
-      "post": {
-        "tags": [
-          "soporte"
-        ],
-        "summary": "EP-SOP-01: Crear reporte de soporte",
-        "operationId": "crear_reporte_soporte_v1_soporte_reportes_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CrearReporteSoporteRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Reporte creado en estado ABIERTO",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/ReporteSoporteResponse"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "title": "Response Crear Reporte Soporte"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Token requerido"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
-      },
-      "get": {
-        "tags": [
-          "soporte"
-        ],
-        "summary": "EP-SOP-02: Listar reportes activos",
-        "operationId": "listar_reportes_soporte_v1_soporte_reportes_get",
-        "responses": {
-          "200": {
-            "description": "Lista de reportes ABIERTO/EN_INVESTIGACION",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "reportes": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/ReporteSoporteResponse"
-                          }
-                        },
-                        "total": {
-                          "type": "integer"
-                        }
-                      }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "title": "Response Listar Reportes Soporte"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Token requerido"
-          },
-          "403": {
-            "description": "Solo SUPERADMIN"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
       }
     }
   },
@@ -2755,6 +3656,110 @@
         ],
         "title": "AbrirOTRequest"
       },
+      "ActivarPlanRequest": {
+        "properties": {
+          "vehiculo_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Vehiculo Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vehiculo_id"
+        ],
+        "title": "ActivarPlanRequest"
+      },
+      "ActualizarDatosRequest": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoriaRepuesto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelo"
+          },
+          "año": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2100.0,
+                "minimum": 1990.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Año"
+          },
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo"
+          },
+          "universo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universo"
+          }
+        },
+        "type": "object",
+        "title": "ActualizarDatosRequest",
+        "description": "EP-CAT-10 — campos editables de repuesto. Todos opcionales (PATCH semántico).\ncodigo y universo se declaran explícitamente para poder detectar su presencia y\nrechazar con 422 específico (decisión PCT 2026-06-28 corr. 2026-06-28 — mejor\nvisibilidad de errores de integración que silenciar). precio_venta nunca se acepta\naquí (usa EP-CAT-04)."
+      },
       "ActualizarEstadoRequest": {
         "properties": {
           "estado": {
@@ -2805,6 +3810,19 @@
           "precio_venta"
         ],
         "title": "ActualizarPrecioRequest"
+      },
+      "ActualizarTemaRequest": {
+        "properties": {
+          "variante_tema": {
+            "type": "string",
+            "title": "Variante Tema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "variante_tema"
+        ],
+        "title": "ActualizarTemaRequest"
       },
       "AgregarRepuestoRequest": {
         "properties": {
@@ -2861,6 +3879,144 @@
           "cliente_id"
         ],
         "title": "AutorizarPrecioRequest"
+      },
+      "Body_reemplazar_imagen_repuesto_v1_repuestos__codigo__imagenes__imagen_id__put": {
+        "properties": {
+          "archivo": {
+            "type": "string",
+            "format": "binary",
+            "title": "Archivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archivo"
+        ],
+        "title": "Body_reemplazar_imagen_repuesto_v1_repuestos__codigo__imagenes__imagen_id__put"
+      },
+      "Body_registro_v1_auth_registro_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "consentimiento_privacidad": {
+            "type": "boolean",
+            "title": "Consentimiento Privacidad"
+          },
+          "dni_frente": {
+            "type": "string",
+            "format": "binary",
+            "title": "Dni Frente"
+          },
+          "dni_dorso": {
+            "type": "string",
+            "format": "binary",
+            "title": "Dni Dorso"
+          },
+          "certificado_tecnico": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "binary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificado Tecnico"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nombre",
+          "password",
+          "rol",
+          "consentimiento_privacidad",
+          "dni_frente",
+          "dni_dorso"
+        ],
+        "title": "Body_registro_v1_auth_registro_post"
+      },
+      "Body_subir_imagen_repuesto_v1_repuestos__codigo__imagenes_post": {
+        "properties": {
+          "archivo": {
+            "type": "string",
+            "format": "binary",
+            "title": "Archivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archivo"
+        ],
+        "title": "Body_subir_imagen_repuesto_v1_repuestos__codigo__imagenes_post"
+      },
+      "Body_subir_imagen_unica_repuesto_v1_repuestos__codigo__imagen_post": {
+        "properties": {
+          "archivo": {
+            "type": "string",
+            "format": "binary",
+            "title": "Archivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archivo"
+        ],
+        "title": "Body_subir_imagen_unica_repuesto_v1_repuestos__codigo__imagen_post"
+      },
+      "BootstrapSuperadminRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "bootstrap_key": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Bootstrap Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nombre",
+          "password",
+          "bootstrap_key"
+        ],
+        "title": "BootstrapSuperadminRequest"
       },
       "CancelarOTRequest": {
         "properties": {
@@ -3114,6 +4270,21 @@
           "items"
         ],
         "title": "CrearReabastecimientoRequest"
+      },
+      "CrearReporteSoporteRequest": {
+        "properties": {
+          "descripcion": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Descripcion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "descripcion"
+        ],
+        "title": "CrearReporteSoporteRequest"
       },
       "CrearRepuestoRequest": {
         "properties": {
@@ -3390,6 +4561,19 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ImpersonateRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "ImpersonateRequest"
+      },
       "ItemInput": {
         "properties": {
           "codigo": {
@@ -3556,6 +4740,52 @@
         ],
         "title": "NivelUrgencia"
       },
+      "PruebaRutaRequest": {
+        "properties": {
+          "observaciones": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observaciones"
+          },
+          "salud_declarada": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salud Declarada"
+          }
+        },
+        "type": "object",
+        "title": "PruebaRutaRequest"
+      },
+      "RechazarCuentaRequest": {
+        "properties": {
+          "motivo_rechazo": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Motivo Rechazo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivo_rechazo"
+        ],
+        "title": "RechazarCuentaRequest"
+      },
       "RegistrarEnvioRequest": {
         "properties": {
           "empresa_encomienda": {
@@ -3575,6 +4805,23 @@
           "direccion_destino"
         ],
         "title": "RegistrarEnvioRequest"
+      },
+      "ReordenarImagenesRequest": {
+        "properties": {
+          "imagenes_ordenadas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Imagenes Ordenadas",
+            "description": "Lista completa de imagen_ids en el nuevo orden deseado. Debe contener exactamente los IDs existentes para este repuesto."
+          }
+        },
+        "type": "object",
+        "required": [
+          "imagenes_ordenadas"
+        ],
+        "title": "ReordenarImagenesRequest"
       },
       "RevisionFinalRequest": {
         "properties": {
@@ -3641,8 +4888,9 @@
       "UniversoRepuesto": {
         "type": "string",
         "enum": [
-          "mototaxi",
-          "motolineal"
+          "motolineal",
+          "mototaxi_3r",
+          "mototaxi_4r"
         ],
         "title": "UniversoRepuesto"
       },
@@ -3678,92 +4926,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "CrearReporteSoporteRequest": {
-        "properties": {
-          "descripcion": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000,
-            "title": "Descripcion"
-          }
-        },
-        "type": "object",
-        "required": [
-          "descripcion"
-        ],
-        "title": "CrearReporteSoporteRequest"
-      },
-      "EstadoReporteSoporte": {
-        "type": "string",
-        "enum": [
-          "ABIERTO",
-          "EN_INVESTIGACION",
-          "RESUELTO",
-          "CERRADO_SIN_RESOLUCION"
-        ],
-        "title": "EstadoReporteSoporte"
-      },
-      "ReporteSoporteResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "usuario_reportante_id": {
-            "type": "string",
-            "title": "Usuario Reportante Id"
-          },
-          "rol_usuario_reportante": {
-            "type": "string",
-            "title": "Rol Usuario Reportante"
-          },
-          "descripcion": {
-            "type": "string",
-            "title": "Descripcion"
-          },
-          "estado": {
-            "$ref": "#/components/schemas/EstadoReporteSoporte"
-          },
-          "creado_en": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Creado En"
-          },
-          "resuelto_en": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resuelto En"
-          },
-          "resuelto_por": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resuelto Por"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "usuario_reportante_id",
-          "rol_usuario_reportante",
-          "descripcion",
-          "estado",
-          "creado_en"
-        ],
-        "title": "ReporteSoporteResponse"
       }
     }
   }

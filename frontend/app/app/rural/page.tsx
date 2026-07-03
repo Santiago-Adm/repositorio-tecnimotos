@@ -23,6 +23,7 @@ interface Repuesto {
 export default function ClienteRuralDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
+  const [seccion, setSeccion] = useState<'¿Qué necesitas?' | 'Mis reservas'>('¿Qué necesitas?')
   const [busqueda, setBusqueda] = useState('')
   const [repuestos, setRepuestos] = useState<Repuesto[]>([])
   const [loading, setLoading] = useState(false)
@@ -55,7 +56,7 @@ export default function ClienteRuralDashboard() {
 
     try {
       const data = await apiClient.get<{repuestos: Repuesto[], total: number}>(
-        `/v1/repuestos?universo=mototaxi&q=${encodeURIComponent(busqueda)}`
+        `/v1/repuestos?universo=mototaxi_3r&q=${encodeURIComponent(busqueda)}`
       )
       clearTimeout(timeoutId)
       setRepuestos(data.repuestos ?? [])
@@ -76,8 +77,16 @@ export default function ClienteRuralDashboard() {
       <DashboardHeader userId={user.id} rol="CLIENTE_RURAL" onLogout={logout} />
 
       <nav className="flex gap-2 px-4 py-3 border-b border-slate-800 overflow-x-auto">
-        {['¿Qué necesitas?', 'Mis reservas'].map(m => (
-          <button key={m} className="shrink-0 px-3 py-1.5 rounded-full text-xs font-body text-slate-300 border border-slate-700 hover:bg-slate-800 whitespace-nowrap">
+        {(['¿Qué necesitas?', 'Mis reservas'] as const).map(m => (
+          <button
+            key={m}
+            onClick={() => setSeccion(m)}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-body transition-colors border ${
+              seccion === m
+                ? 'bg-teal border-teal text-white font-semibold'
+                : 'text-slate-300 border-slate-700 hover:bg-slate-800'
+            } whitespace-nowrap`}
+          >
             {m}
           </button>
         ))}
@@ -85,65 +94,72 @@ export default function ClienteRuralDashboard() {
 
       {/* Vista por defecto: confirmación de stock (10 §4.10 — mismo dolor principal que S1) */}
       <main className="p-4 md:p-6 space-y-6 max-w-lg mx-auto">
-        <section>
-          <h2 className="font-display text-lg font-semibold text-slate-100 mb-4">
-            ¿Qué necesitas hoy?
-          </h2>
-          <form onSubmit={buscar} className="flex gap-2">
-            <input
-              type="search"
-              placeholder="Código o nombre del repuesto..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal"
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-3 rounded-xl bg-teal text-white text-sm font-body hover:bg-teal/90 transition-colors disabled:opacity-60"
-            >
-              Buscar
-            </button>
-          </form>
+        {seccion !== '¿Qué necesitas?' && (
+          <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
+            <p className="text-slate-400 font-body text-sm">
+              Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
+            </p>
+          </section>
+        )}
 
-          <div className="mt-4">
-            {loading ? (
-              <LoadingIndicator message="Verificando stock — espera un momento..." />
-            ) : timedOut ? (
-              /* Mensaje exacto de 02 §5.4 HU-S4-01 Escenario 2 / 10 §5.4 */
-              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-5 text-center">
-                <p className="text-sm text-slate-300 font-body mb-3">
-                  Sin conexión — intenta de nuevo cuando tengas señal.
-                </p>
-                <button
-                  onClick={() => buscar()}
-                  className="px-4 py-2 rounded-lg bg-teal text-white text-sm font-body hover:bg-teal/90 transition-colors"
-                >
-                  Reintentar
-                </button>
-              </div>
-            ) : error ? (
-              <ErrorDisplay code={error} onRetry={() => buscar()} />
-            ) : repuestos.length > 0 ? (
-              <div className="space-y-2">
-                {repuestos.map(r => (
-                  <div key={r.codigo} className="rounded-xl bg-slate-800 border border-slate-700 p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-mono text-slate-200">{r.codigo}</p>
-                      <p className="text-xs text-slate-400 font-body">{r.nombre}</p>
+        {seccion === '¿Qué necesitas?' && (
+          <section>
+            <h2 className="font-display text-lg font-semibold text-slate-100 mb-4">
+              ¿Qué necesitas hoy?
+            </h2>
+            <form onSubmit={buscar} className="flex gap-2">
+              <input
+                type="search"
+                placeholder="Código o nombre del repuesto..."
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="px-4 py-3 rounded-xl bg-teal text-white text-sm font-body hover:bg-teal/90 transition-colors"
+              >
+                Buscar
+              </button>
+            </form>
+
+            <div className="mt-4">
+              {loading ? (
+                <LoadingIndicator message="Buscando..." />
+              ) : timedOut ? (
+                <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-6 text-center">
+                  <p className="text-sm font-body text-slate-300 mb-2">Conexión inestable</p>
+                  <p className="text-xs font-body text-slate-400 mb-4">La búsqueda está tardando más de lo esperado debido a la cobertura rural.</p>
+                  <button
+                    onClick={() => buscar()}
+                    className="px-4 py-2 rounded-lg bg-teal text-white text-sm font-body hover:bg-teal/90 transition-colors"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : error ? (
+                <ErrorDisplay code={error} onRetry={() => buscar()} />
+              ) : repuestos.length > 0 ? (
+                <div className="space-y-2">
+                  {repuestos.map(r => (
+                    <div key={r.codigo} className="rounded-xl bg-slate-800 border border-slate-700 p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-mono text-slate-200">{r.codigo}</p>
+                        <p className="text-xs text-slate-400 font-body">{r.nombre}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full font-body ${r.activo !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
+                        {r.activo !== false ? 'Disponible' : 'Sin stock'}
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-body ${r.activo !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
-                      {r.activo !== false ? 'Disponible' : 'Sin stock'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : busqueda && !loading ? (
-              <EmptyState title="Sin resultados" description="No encontramos ese repuesto. Prueba con otro código." />
-            ) : null}
-          </div>
-        </section>
+                  ))}
+                </div>
+              ) : busqueda && !loading ? (
+                <EmptyState title="Sin resultados" description="No encontramos ese repuesto. Prueba con otro código." />
+              ) : null}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-5">
           <h3 className="font-display text-sm font-semibold text-slate-300 mb-2">Cómo funciona</h3>

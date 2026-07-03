@@ -13,8 +13,9 @@ from typing import Optional
 
 
 class UniversoRepuesto(str, Enum):
-    MOTOTAXI = "mototaxi"
     MOTOLINEAL = "motolineal"
+    MOTOTAXI_3R = "mototaxi_3r"
+    MOTOTAXI_4R = "mototaxi_4r"
 
 
 class EstadoStockUnidad(str, Enum):
@@ -70,7 +71,7 @@ class Repuesto:
     nombre: str
     universo: UniversoRepuesto
     modelo: str
-    año: int
+    año: Optional[int]
     categoria: CategoriaRepuesto
     precio_venta: Decimal
     descripcion: str = ""
@@ -80,13 +81,14 @@ class Repuesto:
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     eliminado_en: Optional[datetime] = None
     historial_precio: list[HistorialPrecio] = field(default_factory=list)
+    imagen_url: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.precio_venta <= Decimal("0"):
             raise PrecioInvalidoError(
                 f"precio_venta debe ser mayor a 0, recibido: {self.precio_venta}"
             )
-        if not (1990 <= self.año <= 2100):
+        if self.año is not None and not (1990 <= self.año <= 2100):
             raise DomainError(f"año debe estar entre 1990 y 2100, recibido: {self.año}")
 
     def actualizar_precio(self, nuevo_precio: Decimal, modificado_por: str) -> HistorialPrecio:
@@ -104,6 +106,34 @@ class Repuesto:
         self.precio_venta = nuevo_precio
         self.updated_at = datetime.now(timezone.utc)
         return entrada
+
+    def actualizar_datos(
+        self,
+        nombre: Optional[str] = None,
+        descripcion: Optional[str] = None,
+        categoria: Optional["CategoriaRepuesto"] = None,
+        modelo: Optional[str] = None,
+        año: Optional[int] = None,
+    ) -> None:
+        """Actualiza campos descriptivos. Nunca toca precio_venta ni dispara eventos."""
+        if nombre is not None:
+            self.nombre = nombre
+        if descripcion is not None:
+            self.descripcion = descripcion
+        if categoria is not None:
+            self.categoria = categoria
+        if modelo is not None:
+            self.modelo = modelo
+        if año is not None:
+            if not (1990 <= año <= 2100):
+                raise DomainError(f"año debe estar entre 1990 y 2100, recibido: {año}")
+            self.año = año
+        self.updated_at = datetime.now(timezone.utc)
+
+    def establecer_imagen(self, url: str) -> None:
+        """Reemplaza la imagen del repuesto (convención de key fija — siempre 1 imagen)."""
+        self.imagen_url = url
+        self.updated_at = datetime.now(timezone.utc)
 
     def dar_de_baja(self, motivo: str) -> None:
         """Baja lógica — el repuesto no se elimina físicamente (EP-CAT-05)."""

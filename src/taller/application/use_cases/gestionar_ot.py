@@ -113,6 +113,14 @@ class CancelarOTCommand:
 
 
 @dataclass
+class RegistrarPruebaRutaCommand:
+    ot_id: str
+    observaciones: Optional[str]
+    salud_declarada: Optional[int]  # None → sistema asigna 100 si no hay observaciones
+    actor_id: str
+
+
+@dataclass
 class LiberarVehiculoCommand:
     ot_id: str
     actor_id: str
@@ -440,6 +448,46 @@ class CancelarOrdenTrabajoUseCase:
             },
         ))
         return ot
+
+
+class RegistrarPruebaRutaUseCase:
+    """EP-TAL-13: POST /v1/ordenes-trabajo/{id}/prueba-ruta
+    Sin observaciones → salud_estimada = 100 automático.
+    Con observaciones → mecánico declara el valor; debe ser < 100 por convención
+    (el dominio acepta cualquier 0-100, la regla de negocio la impone el endpoint)."""
+
+    def __init__(self, repo: TallerRepository) -> None:
+        self._repo = repo
+
+    async def execute(self, cmd: RegistrarPruebaRutaCommand) -> tuple[OrdenTrabajo, Vehiculo]:
+        ot = await self._repo.obtener_ot(cmd.ot_id)
+        if ot is None:
+            raise OrdenTrabajoNoEncontradaError(f"OT {cmd.ot_id} no encontrada")
+
+        vehiculo = await self._repo.obtener_vehiculo(ot.vehiculo_id)
+        if vehiculo is None:
+            raise VehiculoNoEncontradoError(
+                f"Vehículo {ot.vehiculo_id} no encontrado para OT {cmd.ot_id}"
+            )
+
+        # Sin observaciones: sistema asigna 100. Con observaciones: mecánico declara.
+        salud_final: int
+        if not cmd.observaciones:
+            salud_final = 100
+        else:
+            if cmd.salud_declarada is None:
+                raise DomainError(
+                    "salud_declarada es obligatorio cuando se registran observaciones"
+                )
+            salud_final = cmd.salud_declarada
+
+        ot.registrar_prueba_ruta(cmd.observaciones, salud_final)
+        vehiculo.salud_estimada = salud_final
+
+        await self._repo.actualizar_ot(ot)
+        await self._repo.actualizar_vehiculo(vehiculo)
+
+        return ot, vehiculo
 
 
 class LiberarVehiculoUseCase:

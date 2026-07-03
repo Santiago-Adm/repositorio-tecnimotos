@@ -24,7 +24,7 @@ def _repuesto_fixture() -> Repuesto:
     return Repuesto(
         codigo="REP-OT-001",
         nombre="Bujia TVS",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="TVS King",
         año=2020,
         categoria=CategoriaRepuesto.ELECTRICO,

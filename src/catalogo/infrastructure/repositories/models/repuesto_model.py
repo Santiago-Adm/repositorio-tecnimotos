@@ -25,13 +25,14 @@ class RepuestoModel(Base):
     descripcion: Mapped[str] = mapped_column(Text, nullable=False, default="")
     universo: Mapped[str] = mapped_column(String(20), nullable=False)
     modelo: Mapped[str] = mapped_column(String(100), nullable=False)
-    año: Mapped[int] = mapped_column(nullable=False)
+    año: Mapped[int | None] = mapped_column(nullable=True)
     categoria: Mapped[str] = mapped_column(String(50), nullable=False)
     precio_venta: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     precio_costo: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )  # cifrado Fernet (03 §5.7)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    imagen_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     eliminado_en: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -44,11 +45,11 @@ class RepuestoModel(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "universo IN ('mototaxi', 'motolineal')",
+            "universo IN ('motolineal', 'mototaxi_3r', 'mototaxi_4r')",
             name="chk_repuesto_universo",
         ),
         CheckConstraint(
-            "año BETWEEN 1990 AND 2100",
+            "año IS NULL OR año BETWEEN 1990 AND 2100",
             name="chk_repuesto_año",
         ),
         CheckConstraint(

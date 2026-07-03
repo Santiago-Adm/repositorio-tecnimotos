@@ -26,25 +26,30 @@ interface StockResponse {
   total: number
 }
 
+type Seccion = 'Stock' | 'Catálogo' | 'Pedidos' | 'Taller' | 'Admin'
+
 export default function AdministradorDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
+  const [seccion, setSeccion] = useState<Seccion>('Stock')
   const [stock, setStock] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  function fetchStock() {
-    setLoading(true)
+  function fetchStock(silencioso = false) {
+    if (!silencioso) setLoading(true)
     setError(null)
     apiClient
       .get<StockResponse>('/v1/stock')
       .then(d => { setStock(d.stocks); setLoading(false) })
-      .catch((err: ApiCallError) => { setError(err.code); setLoading(false) })
+      .catch((err: ApiCallError) => { if (!silencioso) setError(err.code); setLoading(false) })
   }
 
   useEffect(() => {
     if (user && user.rol !== 'ADMINISTRADOR') { router.replace('/login'); return }
     fetchStock()
+    const intervalo = setInterval(() => fetchStock(true), 30000)
+    return () => clearInterval(intervalo)
   }, [user, router])
 
   if (!user) return null
@@ -59,16 +64,28 @@ export default function AdministradorDashboard() {
       <div className="flex">
         {/* Navegación — 02 §4.1 ADMINISTRADOR */}
         <nav className="hidden md:flex flex-col w-48 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1">
-          {['Catálogo', 'Stock', 'Pedidos', 'Taller', 'Admin'].map(m => (
-            <button key={m} className="text-left px-3 py-2 rounded-lg text-sm font-body text-slate-300 hover:bg-slate-800 transition-colors">
+          {(['Stock', 'Catálogo', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setSeccion(m)}
+              className={`text-left px-3 py-2 rounded-lg text-sm font-body transition-colors ${
+                seccion === m ? 'text-teal bg-teal/10' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
               {m}
             </button>
           ))}
         </nav>
 
-        {/* Vista por defecto: Stock con alertas de umbral mínimo (10 §4.4, 01 §RNN-07) */}
         <main className="flex-1 p-6 space-y-6">
-          {alertas.length > 0 && (
+          {seccion !== 'Stock' && (
+            <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
+              <p className="text-slate-400 font-body text-sm">
+                Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
+              </p>
+            </section>
+          )}
+          {seccion === 'Stock' && alertas.length > 0 && (
             <section>
               <h2 className="font-display text-base font-semibold text-electric mb-3">
                 Alertas de stock ({alertas.length})
@@ -87,15 +104,15 @@ export default function AdministradorDashboard() {
             </section>
           )}
 
-          <section>
+          {seccion === 'Stock' && <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold text-slate-100">Stock general</h2>
-              <button onClick={fetchStock} className="text-xs text-teal font-body hover:underline">Actualizar</button>
+              <button onClick={() => fetchStock()} className="text-xs text-teal font-body hover:underline">Actualizar</button>
             </div>
             {loading ? (
               <LoadingIndicator message="Cargando stock..." />
             ) : error ? (
-              <ErrorDisplay code={error} onRetry={fetchStock} />
+              <ErrorDisplay code={error} onRetry={() => fetchStock()} />
             ) : stock.length === 0 ? (
               <EmptyState title="No hay stock registrado" description="Cuando se registren repuestos en el catálogo, aparecerán aquí." />
             ) : (
@@ -120,7 +137,7 @@ export default function AdministradorDashboard() {
                 </table>
               </div>
             )}
-          </section>
+          </section>}
 
           <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-5">
             <h3 className="font-display text-sm font-semibold text-slate-300 mb-2">Cómo funciona</h3>

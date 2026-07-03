@@ -14,6 +14,7 @@ import {
   clearStoredToken,
   decodeJwtPayload,
 } from '@/src/lib/api-client'
+import { VARIANTE_TEMA_CACHE_KEY } from '@/src/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 
 interface AuthContextValue {
@@ -22,6 +23,7 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<string>
   verifyMfa: (mfaSessionToken: string, totpCode: string) => Promise<void>
+  setAuthToken: (storedToken: string) => void
   logout: () => Promise<void>
 }
 
@@ -41,6 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (payload.exp * 1000 > Date.now()) {
           setToken(stored)
           setUser({ id: payload.sub, rol: payload.rol as Rol })
+          // Asegurar que la cookie esté sincronizada en el montaje de la app
+          if (typeof document !== 'undefined') {
+            document.cookie = `auth_token=${stored}; path=/; SameSite=Strict`
+          }
         } else {
           clearStoredToken()
         }
@@ -57,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const verifyMfa = useCallback(async (mfaSessionToken: string, totpCode: string): Promise<void> => {
-    const data = await apiClient.post<{ access_token: string; token_type: string }>('/v1/auth/mfa', {
+    const data = await apiClient.post<{ access_token: string; token_type: string; variante_tema?: string }>('/v1/auth/mfa', {
       mfa_session_token: mfaSessionToken,
       totp_code: totpCode,
     })
@@ -67,8 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredToken(accessToken)
     setToken(accessToken)
     setUser(authUser)
+    // Poblar caché de tema con el valor confirmado por el backend (EP-AUTH-02 / EP-USR-01)
+    if (data.variante_tema) {
+      localStorage.setItem(VARIANTE_TEMA_CACHE_KEY, data.variante_tema)
+    }
     router.replace(rolToRoute(authUser.rol))
   }, [router])
+
+  const setAuthToken = useCallback((storedToken: string): void => {
+    const payload = decodeJwtPayload(storedToken)
+    const authUser: AuthUser = { id: payload.sub, rol: payload.rol as Rol }
+    setStoredToken(storedToken)
+    setToken(storedToken)
+    setUser(authUser)
+  }, [])
 
   const logout = useCallback(async (): Promise<void> => {
     try {
@@ -77,13 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // token may already be invalid — proceed with local cleanup
     }
     clearStoredToken()
+    localStorage.removeItem(VARIANTE_TEMA_CACHE_KEY)
     setToken(null)
     setUser(null)
     router.replace('/login')
   }, [router])
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, verifyMfa, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, verifyMfa, setAuthToken, logout }}>
       {children}
     </AuthContext.Provider>
   )

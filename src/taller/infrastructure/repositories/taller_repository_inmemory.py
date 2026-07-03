@@ -45,6 +45,10 @@ class InMemoryTallerRepository:
     async def obtener_vehiculo(self, v_id: str) -> Optional[Vehiculo]:
         return self._vehiculos.get(v_id)
 
+    async def actualizar_vehiculo(self, v: Vehiculo) -> Vehiculo:
+        self._vehiculos[v.id] = v
+        return v
+
     async def guardar_mecanico(self, m: Mecanico) -> Mecanico:
         self._mecanicos[m.id] = m
         return m

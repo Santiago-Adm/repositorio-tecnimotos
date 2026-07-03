@@ -1,10 +1,15 @@
 """
-Router FastAPI para el módulo catalogo — 7 endpoints EP-CAT-01 a EP-CAT-06
+Router FastAPI para el módulo catalogo — EP-CAT-01 a EP-CAT-12
 más EP para consulta de lista S2 (03 §6.2, HU-S1-01, HU-S1-05, HU-INT-01).
 
 Regla crítica de separación (03 §6.2):
 - EP-CAT-01 y EP-CAT-02 NUNCA devuelven precio_venta bajo ninguna condición.
 - Solo EP-CAT-02-B expone precio, con lógica de visibilidad.
+
+EP-CAT-04: actualiza precio, dispara repuesto.precio_actualizado.
+EP-CAT-10: actualiza datos descriptivos, NUNCA toca precio ni dispara eventos.
+EP-CAT-08/09: galería de imágenes (sesión 2026-06-27).
+EP-CAT-11/12: reemplazar imagen y reordenar galería (sesión 2026-06-28).
 """
 from __future__ import annotations
 
@@ -12,7 +17,7 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from api.auth import require_roles
@@ -41,9 +46,31 @@ from src.catalogo.application.use_cases.dar_de_baja_repuesto import (
     DarDeBajaRepuestoCommand,
     DarDeBajaRepuestoUseCase,
 )
+from src.catalogo.application.use_cases.gestionar_imagenes import (
+    EliminarImagenCommand,
+    EliminarImagenUseCase,
+    ImagenNoEncontradaError,
+    ImagenNoPertenecerAlRepuestoError,
+    ListarImagenesUseCase,
+    ReemplazarImagenCommand,
+    ReemplazarImagenUseCase,
+    ReordenarImagenesCommand,
+    ReordenarImagenesUseCase,
+    ReordenInvalidoError,
+    SubirImagenCommand,
+    SubirImagenUseCase,
+)
+from src.catalogo.application.use_cases.actualizar_datos_repuesto import (
+    ActualizarDatosCommand,
+    ActualizarDatosRepuestoUseCase,
+)
 from src.catalogo.application.use_cases.obtener_historial_precio import (
     ObtenerHistorialPrecioQuery,
     ObtenerHistorialPrecioUseCase,
+)
+from src.catalogo.application.use_cases.subir_imagen_repuesto import (
+    SubirImagenRepuestoCommand,
+    SubirImagenRepuestoUseCase,
 )
 from src.catalogo.domain.models.repuesto import (
     CategoriaRepuesto,
@@ -53,6 +80,9 @@ from src.catalogo.domain.models.repuesto import (
     UniversoRepuesto,
 )
 
+_IMAGEN_MAX_BYTES = 5 * 1024 * 1024  # 5 MB — decisión tomada en sesión 2026-06-27
+_IMAGEN_TIPOS_PERMITIDOS = {"image/jpeg", "image/png", "image/webp"}
+
 router = APIRouter(prefix="/v1", tags=["catalogo"])
 logger = logging.getLogger(__name__)
 
@@ -60,32 +90,44 @@ logger = logging.getLogger(__name__)
 # ── Schemas de entrada/salida ────────────────────────────────────────────────
 
 class RepuestoListItem(BaseModel):
-    """Schema para EP-CAT-01 — SIN precio_venta (03 §6.2 regla crítica)."""
+    """Schema para EP-CAT-01 — SIN precio_venta (03 §6.2 regla crítica).
+    imagen_principal_url: extensión aditiva (sesión 2026-06-27) — URL de imagen orden=0."""
     id: str
     codigo: str
     nombre: str
     universo: str
     modelo: str
-    año: int
+    año: Optional[int] = None
     categoria: str
     activo: bool
     advertencia_instalacion: bool
+    imagen_principal_url: Optional[str] = None
+    imagen_url: Optional[str] = None
+
+
+class ImagenResumen(BaseModel):
+    imagen_id: str
+    url: str
+    orden: int
 
 
 class RepuestoDetalle(BaseModel):
-    """Schema para EP-CAT-02 — SIN precio_venta (03 §6.2 regla crítica)."""
+    """Schema para EP-CAT-02 — SIN precio_venta (03 §6.2 regla crítica).
+    imagenes: extensión aditiva (sesión 2026-06-27) — lista ordenada por campo orden."""
     id: str
     codigo: str
     nombre: str
     descripcion: str
     universo: str
     modelo: str
-    año: int
+    año: Optional[int] = None
     categoria: str
     activo: bool
     advertencia_instalacion: bool
     disponible: bool
     opcion_notificacion: bool
+    imagenes: list[ImagenResumen] = Field(default_factory=list)
+    imagen_url: Optional[str] = None
 
 
 class PrecioResponse(BaseModel):
@@ -115,6 +157,22 @@ class ActualizarPrecioRequest(BaseModel):
     precio_venta: Decimal = Field(gt=0)
 
 
+class ActualizarDatosRequest(BaseModel):
+    """EP-CAT-10 — campos editables de repuesto. Todos opcionales (PATCH semántico).
+    codigo y universo se declaran explícitamente para poder detectar su presencia y
+    rechazar con 422 específico (decisión PCT 2026-06-28 corr. 2026-06-28 — mejor
+    visibilidad de errores de integración que silenciar). precio_venta nunca se acepta
+    aquí (usa EP-CAT-04)."""
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    descripcion: Optional[str] = Field(default=None, max_length=2000)
+    categoria: Optional[CategoriaRepuesto] = None
+    modelo: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    año: Optional[int] = Field(default=None, ge=1990, le=2100)
+    # Campos declarados para detectar su presencia — siempre deben ser None
+    codigo: Optional[str] = Field(default=None, exclude=True)
+    universo: Optional[str] = Field(default=None, exclude=True)
+
+
 class DarDeBajaRequest(BaseModel):
     motivo: str = Field(min_length=1)
 
@@ -138,6 +196,20 @@ def _get_event_publisher(request: Request):
     return request.app.state.event_bus
 
 
+def _get_imagen_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.catalogo.infrastructure.repositories.imagen_repuesto_repository_pg import (
+            ImagenRepuestoRepositoryPG,
+        )
+        return ImagenRepuestoRepositoryPG(db)
+    return request.app.state.imagen_repuesto_repo
+
+
+def _get_imagen_storage(request: Request):
+    return request.app.state.imagen_storage
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/repuestos", summary="EP-CAT-01: Buscar repuestos")
@@ -146,38 +218,71 @@ async def buscar_repuestos(
     universo: UniversoRepuesto,
     modelo: Optional[str] = None,
     año: Optional[int] = None,
+    categoria: Optional[CategoriaRepuesto] = None,
+    page: int = Query(1, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Búsqueda por universo, modelo y año. NUNCA devuelve precio_venta."""
+    """Búsqueda por universo, modelo, año y categoría. NUNCA devuelve precio_venta.
+    Incluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.
+    page/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad
+    con consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /
+    sesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md)."""
     repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
     use_case = BuscarRepuestosUseCase(repo)
+    listar_uc = ListarImagenesUseCase(imagen_repo)
     result = await use_case.execute(
         BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año)
     )
-    items = [
-        RepuestoListItem(
-            id=r.id,
-            codigo=r.codigo,
-            nombre=r.nombre,
-            universo=r.universo.value,
-            modelo=r.modelo,
-            año=r.año,
-            categoria=r.categoria.value,
-            activo=r.activo,
-            advertencia_instalacion=r.requiere_advertencia_instalacion(),
-        ).model_dump()
-        for r in result.repuestos
-    ]
+    repuestos_filtrados = result.repuestos
+    if categoria is not None:
+        repuestos_filtrados = [r for r in repuestos_filtrados if r.categoria == categoria]
+    total_filtrado = len(repuestos_filtrados)
+
+    total_paginas: Optional[int] = None
+    if limit is not None:
+        total_paginas = max(1, -(-total_filtrado // limit))
+        inicio = (page - 1) * limit
+        repuestos_pagina = repuestos_filtrados[inicio: inicio + limit]
+    else:
+        repuestos_pagina = repuestos_filtrados
+
+    items = []
+    for r in repuestos_pagina:
+        imagenes = await listar_uc.execute(r.id)
+        principal = imagenes[0].url if imagenes else None
+        items.append(
+            RepuestoListItem(
+                id=r.id,
+                codigo=r.codigo,
+                nombre=r.nombre,
+                universo=r.universo.value,
+                modelo=r.modelo,
+                año=r.año,
+                categoria=r.categoria.value,
+                activo=r.activo,
+                advertencia_instalacion=r.requiere_advertencia_instalacion(),
+                imagen_principal_url=principal,
+                imagen_url=r.imagen_url,
+            ).model_dump()
+        )
+    respuesta: dict[str, Any] = {"repuestos": items, "total": total_filtrado}
+    if limit is not None:
+        respuesta.update({"page": page, "limit": limit, "total_paginas": total_paginas})
     return success_response(
-        {"repuestos": items, "total": result.total},
+        respuesta,
         request_id=get_request_id(request),
     )
 
 
 @router.get("/repuestos/{codigo}", summary="EP-CAT-02: Obtener repuesto por código")
 async def obtener_repuesto(request: Request, codigo: str) -> dict[str, Any]:
-    """Obtiene repuesto por código. NUNCA devuelve precio_venta."""
+    """Obtiene repuesto por código. NUNCA devuelve precio_venta.
+    Incluye lista de imágenes ordenadas por campo orden — extensión aditiva."""
     repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
     use_case = ObtenerRepuestoPorCodigoUseCase(repo)
+    listar_uc = ListarImagenesUseCase(imagen_repo)
     repuesto = await use_case.execute(ObtenerRepuestoPorCodigoQuery(codigo=codigo))
     if repuesto is None:
         raise HTTPException(
@@ -189,6 +294,7 @@ async def obtener_repuesto(request: Request, codigo: str) -> dict[str, Any]:
             ),
         )
     stock = await repo.contar_disponibles(repuesto.id)
+    imagenes = await listar_uc.execute(repuesto.id)
     item = RepuestoDetalle(
         id=repuesto.id,
         codigo=repuesto.codigo,
@@ -202,6 +308,11 @@ async def obtener_repuesto(request: Request, codigo: str) -> dict[str, Any]:
         advertencia_instalacion=repuesto.requiere_advertencia_instalacion(),
         disponible=repuesto.activo and stock > 0,
         opcion_notificacion=not repuesto.activo or stock == 0,
+        imagenes=[
+            ImagenResumen(imagen_id=img.id, url=img.url, orden=img.orden)
+            for img in imagenes
+        ],
+        imagen_url=repuesto.imagen_url,
     )
     return success_response(item.model_dump(), request_id=get_request_id(request))
 
@@ -351,6 +462,93 @@ async def actualizar_precio(
     )
 
 
+# ── EP-CAT-10 — Editar datos descriptivos de repuesto ────────────────────────
+
+@router.patch(
+    "/repuestos/{codigo}",
+    summary="EP-CAT-10: Actualizar datos descriptivos de repuesto",
+)
+async def actualizar_datos_repuesto(
+    request: Request,
+    codigo: str,
+    body: ActualizarDatosRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    Corrige nombre, descripcion, categoria, modelo o año.
+    NUNCA toca precio_venta ni dispara repuesto.precio_actualizado.
+    Solo ADMINISTRADOR y SUPERADMIN.
+    """
+    _no_editables = [campo for campo, val in (("codigo", body.codigo), ("universo", body.universo)) if val is not None]
+    if _no_editables:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"Los campos {_no_editables} no son editables por este endpoint. "
+                "`codigo` es el identificador canónico del repuesto y no se modifica. "
+                "`universo` no es editable una vez creado el repuesto.",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    repo = _get_repo(request)
+    use_case = ActualizarDatosRepuestoUseCase(repo)
+
+    try:
+        repuesto = await use_case.execute(
+            ActualizarDatosCommand(
+                codigo=codigo,
+                modificado_por=getattr(request.state, "usuario_id", ""),
+                nombre=body.nombre,
+                descripcion=body.descripcion,
+                categoria=body.categoria,
+                modelo=body.modelo,
+                año=body.año,
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo!r} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    except RepuestoDadoDeBajaError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response(
+                "REPUESTO_DADO_DE_BAJA",
+                f"Repuesto {codigo!r} está dado de baja — no se puede editar",
+                request_id=get_request_id(request),
+            ),
+        )
+    except DomainError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA", str(exc),
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {
+            "repuesto_id": repuesto.id,
+            "codigo": repuesto.codigo,
+            "nombre": repuesto.nombre,
+            "descripcion": repuesto.descripcion,
+            "categoria": repuesto.categoria.value,
+            "modelo": repuesto.modelo,
+            "año": repuesto.año,
+            "updated_at": repuesto.updated_at.isoformat(),
+        },
+        request_id=get_request_id(request),
+    )
+
+
 @router.delete(
     "/repuestos/{codigo}",
     summary="EP-CAT-05: Dar de baja repuesto (baja lógica)",
@@ -459,5 +657,376 @@ async def consultar_lista_codigos(
             "bajo_pedido": [item.__dict__ for item in result.bajo_pedido],
             "accion_pedido": result.accion_pedido,
         },
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-CAT-08 — Subir imagen a repuesto ──────────────────────────────────────
+
+@router.post(
+    "/repuestos/{codigo}/imagenes",
+    status_code=status.HTTP_201_CREATED,
+    summary="EP-CAT-08: Subir imagen a repuesto",
+)
+async def subir_imagen_repuesto(
+    request: Request,
+    codigo: str,
+    archivo: UploadFile = File(...),
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    Solo ADMINISTRADOR y SUPERADMIN.
+    Tipos permitidos: image/jpeg, image/png, image/webp.
+    Límite: 5 MB por imagen (decisión sesión 2026-06-27).
+    La primera imagen subida (orden=0) se convierte automáticamente en la principal.
+    """
+    if archivo.content_type not in _IMAGEN_TIPOS_PERMITIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"Tipo de archivo no permitido: {archivo.content_type!r}. "
+                "Permitidos: image/jpeg, image/png, image/webp",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    contenido = await archivo.read()
+    if len(contenido) > _IMAGEN_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"El archivo supera el límite de 5 MB ({len(contenido)} bytes recibidos)",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
+    storage = _get_imagen_storage(request)
+    use_case = SubirImagenUseCase(repo, imagen_repo, storage)
+
+    try:
+        imagen = await use_case.execute(
+            SubirImagenCommand(
+                codigo_repuesto=codigo,
+                contenido=contenido,
+                nombre_archivo=archivo.filename or "imagen",
+                tipo_contenido=archivo.content_type or "image/jpeg",
+                subido_por=getattr(request.state, "user_id", ""),
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {
+            "imagen_id": imagen.id,
+            "repuesto_id": imagen.repuesto_id,
+            "url": imagen.url,
+            "orden": imagen.orden,
+            "subido_en": imagen.subido_en.isoformat(),
+        },
+        status_code=201,
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-CAT-09 — Eliminar imagen de repuesto ───────────────────────────────────
+
+@router.delete(
+    "/repuestos/{codigo}/imagenes/{imagen_id}",
+    summary="EP-CAT-09: Eliminar imagen de repuesto",
+)
+async def eliminar_imagen_repuesto(
+    request: Request,
+    codigo: str,
+    imagen_id: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """Solo ADMINISTRADOR y SUPERADMIN."""
+    repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
+    storage = _get_imagen_storage(request)
+    use_case = EliminarImagenUseCase(repo, imagen_repo, storage)
+
+    try:
+        await use_case.execute(
+            EliminarImagenCommand(
+                codigo_repuesto=codigo,
+                imagen_id=imagen_id,
+                eliminado_por=getattr(request.state, "user_id", ""),
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    except (ImagenNoEncontradaError, ImagenNoPertenecerAlRepuestoError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "RECURSO_NO_ENCONTRADO",
+                str(exc),
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {"imagen_id": imagen_id, "eliminada": True},
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-CAT-12 — Reordenar imágenes (registrar ANTES que EP-CAT-11 para evitar
+#    que "orden" coincida con un imagen_id capturado por el parámetro de ruta) ──
+
+class ReordenarImagenesRequest(BaseModel):
+    imagenes_ordenadas: list[str] = Field(
+        description="Lista completa de imagen_ids en el nuevo orden deseado. "
+                    "Debe contener exactamente los IDs existentes para este repuesto."
+    )
+
+
+@router.put(
+    "/repuestos/{codigo}/imagenes/orden",
+    summary="EP-CAT-12: Reordenar imágenes de repuesto",
+)
+async def reordenar_imagenes_repuesto(
+    request: Request,
+    codigo: str,
+    body: ReordenarImagenesRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    Solo ADMINISTRADOR y SUPERADMIN.
+    Recibe la lista completa de imagen_ids en el orden deseado.
+    Validación estricta: debe contener exactamente los IDs existentes del repuesto
+    — ni más, ni menos, ni IDs de otro repuesto.
+    Si no coincide, responde 422 con el detalle exacto de la discrepancia.
+    """
+    repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
+    use_case = ReordenarImagenesUseCase(repo, imagen_repo)
+
+    try:
+        imagenes = await use_case.execute(
+            ReordenarImagenesCommand(
+                codigo_repuesto=codigo,
+                nuevo_orden=body.imagenes_ordenadas,
+                reordenado_por=getattr(request.state, "user_id", ""),
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    except ReordenInvalidoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                str(exc),
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {
+            "codigo": codigo,
+            "imagenes": [
+                {"imagen_id": img.id, "url": img.url, "orden": img.orden}
+                for img in imagenes
+            ],
+        },
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-CAT-11 — Reemplazar imagen de repuesto ────────────────────────────────
+
+@router.put(
+    "/repuestos/{codigo}/imagenes/{imagen_id}",
+    summary="EP-CAT-11: Reemplazar imagen de repuesto",
+)
+async def reemplazar_imagen_repuesto(
+    request: Request,
+    codigo: str,
+    imagen_id: str,
+    archivo: UploadFile = File(...),
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    Solo ADMINISTRADOR y SUPERADMIN.
+    Mantiene el mismo id, orden y repuesto_id — solo cambia la referencia en R2.
+    Tipos permitidos: image/jpeg, image/png, image/webp. Límite: 5 MB.
+    Orden de operaciones: subir nueva → actualizar registro → eliminar objeto anterior.
+    """
+    if archivo.content_type not in _IMAGEN_TIPOS_PERMITIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"Tipo de archivo no permitido: {archivo.content_type!r}. "
+                "Permitidos: image/jpeg, image/png, image/webp",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    contenido = await archivo.read()
+    if len(contenido) > _IMAGEN_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"El archivo supera el límite de 5 MB ({len(contenido)} bytes recibidos)",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    repo = _get_repo(request)
+    imagen_repo = _get_imagen_repo(request)
+    storage = _get_imagen_storage(request)
+    use_case = ReemplazarImagenUseCase(repo, imagen_repo, storage)
+
+    try:
+        imagen = await use_case.execute(
+            ReemplazarImagenCommand(
+                codigo_repuesto=codigo,
+                imagen_id=imagen_id,
+                contenido=contenido,
+                nombre_archivo=archivo.filename or "imagen",
+                tipo_contenido=archivo.content_type or "image/jpeg",
+                reemplazado_por=getattr(request.state, "user_id", ""),
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    except (ImagenNoEncontradaError, ImagenNoPertenecerAlRepuestoError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "RECURSO_NO_ENCONTRADO",
+                str(exc),
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {
+            "imagen_id": imagen.id,
+            "repuesto_id": imagen.repuesto_id,
+            "url": imagen.url,
+            "orden": imagen.orden,
+            "updated_at": imagen.updated_at.isoformat() if imagen.updated_at else None,
+        },
+        request_id=get_request_id(request),
+    )
+
+
+# ── Imagen única de repuesto (campo imagen_url — sesión migración Bajaj) ─────
+# Distinta de EP-CAT-08/09/11/12 (galería multi-imagen, tabla imagen_repuesto):
+# aquí un repuesto tiene una sola foto, key fija repuestos/{codigo}/1.{ext}.
+# Ver .doc3/adr-010-imagen-repuesto-campo-unico.md.
+
+_EXTENSION_POR_TIPO = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
+
+
+def _get_repuesto_imagen_storage(request: Request):
+    return request.app.state.imagen_storage
+
+
+@router.post(
+    "/repuestos/{codigo}/imagen",
+    summary="Subir/reemplazar la imagen de catálogo de un repuesto",
+)
+async def subir_imagen_unica_repuesto(
+    request: Request,
+    codigo: str,
+    archivo: UploadFile = File(...),
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    Solo ADMINISTRADOR y SUPERADMIN. Backend-only (sin UI — queda para sesión
+    de frontend aparte). Tipos permitidos: image/jpeg, image/png, image/webp.
+    Límite: 5 MB. Reemplaza la imagen anterior (key fija, no se acumulan).
+    """
+    if archivo.content_type not in _IMAGEN_TIPOS_PERMITIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"Tipo de archivo no permitido: {archivo.content_type!r}. "
+                "Permitidos: image/jpeg, image/png, image/webp",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    contenido = await archivo.read()
+    if len(contenido) > _IMAGEN_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"El archivo supera el límite de 5 MB ({len(contenido)} bytes recibidos)",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    repo = _get_repo(request)
+    storage = _get_repuesto_imagen_storage(request)
+    use_case = SubirImagenRepuestoUseCase(repo, storage)
+
+    try:
+        url = await use_case.execute(
+            SubirImagenRepuestoCommand(
+                codigo=codigo,
+                contenido=contenido,
+                extension=_EXTENSION_POR_TIPO[archivo.content_type],
+                tipo_contenido=archivo.content_type,
+                subido_por=getattr(request.state, "user_id", ""),
+            )
+        )
+    except RepuestoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "REPUESTO_NO_ENCONTRADO",
+                f"Repuesto {codigo} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    return success_response(
+        {"codigo": codigo, "imagen_url": url},
         request_id=get_request_id(request),
     )

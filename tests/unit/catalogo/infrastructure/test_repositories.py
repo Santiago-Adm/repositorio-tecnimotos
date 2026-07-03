@@ -25,7 +25,7 @@ def repuesto() -> Repuesto:
     return Repuesto(
         codigo="REP-001",
         nombre="Filtro",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2019,
         categoria=CategoriaRepuesto.MOTOR,
@@ -74,7 +74,7 @@ async def test_buscar_por_universo(repo, repuesto):
     await repo.guardar(repuesto)
     await repo.guardar(repuesto_ml)
 
-    result = await repo.buscar(UniversoRepuesto.MOTOTAXI)
+    result = await repo.buscar(UniversoRepuesto.MOTOTAXI_3R)
     assert len(result) == 1
     assert result[0].codigo == "REP-001"
 
@@ -83,23 +83,23 @@ async def test_buscar_por_universo(repo, repuesto):
 async def test_buscar_filtra_dados_de_baja(repo, repuesto):
     repuesto.dar_de_baja("test")
     await repo.guardar(repuesto)
-    result = await repo.buscar(UniversoRepuesto.MOTOTAXI)
+    result = await repo.buscar(UniversoRepuesto.MOTOTAXI_3R)
     assert len(result) == 0
 
 
 @pytest.mark.asyncio
 async def test_buscar_por_modelo(repo, repuesto):
     await repo.guardar(repuesto)
-    result = await repo.buscar(UniversoRepuesto.MOTOTAXI, modelo="Bajaj")
+    result = await repo.buscar(UniversoRepuesto.MOTOTAXI_3R, modelo="Bajaj")
     assert len(result) == 1
 
 
 @pytest.mark.asyncio
 async def test_buscar_por_año(repo, repuesto):
     await repo.guardar(repuesto)
-    result = await repo.buscar(UniversoRepuesto.MOTOTAXI, año=2019)
+    result = await repo.buscar(UniversoRepuesto.MOTOTAXI_3R, año=2019)
     assert len(result) == 1
-    result_vacio = await repo.buscar(UniversoRepuesto.MOTOTAXI, año=2025)
+    result_vacio = await repo.buscar(UniversoRepuesto.MOTOTAXI_3R, año=2025)
     assert len(result_vacio) == 0
 
 

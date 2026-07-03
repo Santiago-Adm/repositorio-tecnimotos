@@ -17,7 +17,7 @@ async def pedidos_client(app_client):
         precio_venta=Decimal("45.00"),
         nombre="Filtro aceite",
         categoria="motor",
-        universo="mototaxi",
+        universo="mototaxi_3r",
         activo=True,
     ))
     catalogo_adapter.agregar_repuesto(RepuestoInfo(
@@ -35,7 +35,7 @@ async def pedidos_client(app_client):
         precio_venta=Decimal("20.00"),
         nombre="Repuesto baja",
         categoria="otro",
-        universo="mototaxi",
+        universo="mototaxi_3r",
         activo=False,
     ))
 

@@ -21,7 +21,7 @@ class TestRepuestoCreacion:
         r = Repuesto(
             codigo="REP-001",
             nombre="Filtro",
-            universo=UniversoRepuesto.MOTOTAXI,
+            universo=UniversoRepuesto.MOTOTAXI_3R,
             modelo="Bajaj RE",
             año=2019,
             categoria=CategoriaRepuesto.MOTOR,
@@ -36,7 +36,7 @@ class TestRepuestoCreacion:
             Repuesto(
                 codigo="REP-X",
                 nombre="X",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2019,
                 categoria=CategoriaRepuesto.MOTOR,
@@ -48,7 +48,7 @@ class TestRepuestoCreacion:
             Repuesto(
                 codigo="REP-X",
                 nombre="X",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2019,
                 categoria=CategoriaRepuesto.MOTOR,
@@ -60,7 +60,7 @@ class TestRepuestoCreacion:
             Repuesto(
                 codigo="REP-X",
                 nombre="X",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=1980,
                 categoria=CategoriaRepuesto.MOTOR,
@@ -72,7 +72,7 @@ class TestRepuestoCreacion:
             Repuesto(
                 codigo="REP-X",
                 nombre="X",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2101,
                 categoria=CategoriaRepuesto.MOTOR,
@@ -127,7 +127,7 @@ class TestAdvertenciaInstalacion:
 
 class TestUniversos:
     def test_universo_mototaxi(self, repuesto_mototaxi):
-        assert repuesto_mototaxi.universo == UniversoRepuesto.MOTOTAXI
+        assert repuesto_mototaxi.universo == UniversoRepuesto.MOTOTAXI_3R
 
     def test_universo_motolineal(self, repuesto_motolineal):
         assert repuesto_motolineal.universo == UniversoRepuesto.MOTOLINEAL

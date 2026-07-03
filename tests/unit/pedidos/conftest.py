@@ -38,7 +38,7 @@ def catalogo() -> InMemoryCatalogoAdapter:
         precio_venta=Decimal("45.00"),
         nombre="Filtro aceite",
         categoria="motor",
-        universo="mototaxi",
+        universo="mototaxi_3r",
         activo=True,
     ))
     adapter.agregar_repuesto(RepuestoInfo(
@@ -56,7 +56,7 @@ def catalogo() -> InMemoryCatalogoAdapter:
         precio_venta=Decimal("80.00"),
         nombre="Freno delantero",
         categoria="frenos",
-        universo="mototaxi",
+        universo="mototaxi_3r",
         activo=False,
     ))
     return adapter

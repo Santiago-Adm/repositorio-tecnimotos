@@ -40,3 +40,10 @@ VERIFICACION_MANUAL.md
 .doc3/
 .dco3/
 
+dependency-check-report/
+semgrep-report.json
+trivy-report.json
+scripts/migracion/
+dependency-check-report/
+semgrep-report.json
+trivy-report.json

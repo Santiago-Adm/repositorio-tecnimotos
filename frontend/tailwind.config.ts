@@ -18,6 +18,12 @@ const config: Config = {
         body: ['var(--font-body)', 'sans-serif'],
         mono: ['var(--font-mono)', 'monospace'],
       },
+      keyframes: {
+        shimmer: {
+          '0%': { 'background-position': '0% center' },
+          '100%': { 'background-position': '200% center' },
+        }
+      }
     },
   },
   plugins: [],

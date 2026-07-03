@@ -192,7 +192,7 @@ class TestInMemoryCatalogoAdapter:
         adapter.agregar_repuesto(RepuestoInfo(
             repuesto_id="rp-1", codigo="REP-001",
             precio_venta=Decimal("45"), nombre="F", categoria="m",
-            universo="mototaxi", activo=True,
+            universo="mototaxi_3r", activo=True,
         ))
         info = await adapter.obtener_precio_vigente("REP-001")
         assert info.precio_venta == Decimal("45")
@@ -207,7 +207,7 @@ class TestInMemoryCatalogoAdapter:
         adapter.agregar_repuesto(RepuestoInfo(
             repuesto_id="rp-1", codigo="REP-001",
             precio_venta=Decimal("45"), nombre="F", categoria="m",
-            universo="mototaxi", activo=True,
+            universo="mototaxi_3r", activo=True,
         ))
         assert await adapter.verificar_existencia("REP-001") is True
         assert await adapter.verificar_existencia("NADA") is False

@@ -25,7 +25,7 @@ async def seed_catalogo_nivel1() -> None:
         Repuesto(
             codigo="SEED-MT-001",
             nombre="Filtro de aceite Bajaj RE",
-            universo=UniversoRepuesto.MOTOTAXI,
+            universo=UniversoRepuesto.MOTOTAXI_3R,
             modelo="Bajaj RE",
             año=2019,
             categoria=CategoriaRepuesto.MOTOR,
@@ -35,7 +35,7 @@ async def seed_catalogo_nivel1() -> None:
         Repuesto(
             codigo="SEED-MT-002",
             nombre="Bujia NGK estándar",
-            universo=UniversoRepuesto.MOTOTAXI,
+            universo=UniversoRepuesto.MOTOTAXI_3R,
             modelo="Bajaj RE",
             año=2020,
             categoria=CategoriaRepuesto.ELECTRICO,
@@ -278,7 +278,7 @@ async def seed_nivel2_postgres(database_url: str) -> None:
                     id=rid,
                     codigo=codigo,
                     nombre=f"Repuesto seed nivel2 {i:02d}",
-                    universo="mototaxi" if i % 2 == 0 else "motolineal",
+                    universo="mototaxi_3r" if i % 2 == 0 else "motolineal",
                     modelo="Universal",
                     año=2018 + (i % 7),
                     categoria=categorias[i % len(categorias)],
@@ -310,7 +310,7 @@ async def seed_nivel2_postgres(database_url: str) -> None:
                 vid = _uid()
                 vehiculos.append(VehiculoModel(
                     id=vid,
-                    universo="mototaxi" if i % 2 == 0 else "motolineal",
+                    universo="mototaxi_3r" if i % 2 == 0 else "motolineal",
                     modelo=f"Modelo Seed {i}",
                     año=2017 + (i % 8),
                 ))

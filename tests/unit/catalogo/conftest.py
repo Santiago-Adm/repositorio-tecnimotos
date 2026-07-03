@@ -28,7 +28,7 @@ def repuesto_mototaxi() -> Repuesto:
     return Repuesto(
         codigo="REP-001",
         nombre="Filtro de aceite Bajaj RE",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2019,
         categoria=CategoriaRepuesto.MOTOR,
@@ -42,7 +42,7 @@ def repuesto_tecnico_especializado() -> Repuesto:
     return Repuesto(
         codigo="REP-060",
         nombre="Sensor ABS especializado",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2021,
         categoria=CategoriaRepuesto.TECNICO_ESPECIALIZADO,

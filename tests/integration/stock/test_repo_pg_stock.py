@@ -29,7 +29,7 @@ async def repuesto_id(pg_session) -> str:
     rep = Repuesto(
         codigo=f"STK-FK-{uuid.uuid4().hex[:8]}",
         nombre="Repuesto para test stock PG",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Test",
         año=2022,
         categoria=CategoriaRepuesto.MOTOR,

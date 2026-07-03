@@ -54,9 +54,17 @@ class UsuarioPerfilModel(Base):
     anonimizado_en: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     anonimizado_por: Mapped[str | None] = mapped_column(String(100), nullable=True)
     foto_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    variante_tema: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="OSCURO_ESTANDAR"
+    )
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
+        CheckConstraint(
+            "variante_tema IN ('OSCURO_ESTANDAR','OSCURO_SUAVE','OSCURO_ALTO_CONTRASTE',"
+            "'CLARO_ESTANDAR','CLARO_CALIDO','CLARO_ALTO_CONTRASTE')",
+            name="chk_usuario_perfil_variante_tema",
+        ),
         Index("idx_usuario_perfil_usuario", "usuario_id"),
         Index("idx_usuario_perfil_consentimiento", "consentimiento_fecha"),
     )

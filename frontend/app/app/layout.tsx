@@ -4,6 +4,7 @@ import { useAuth } from '@/src/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
+import { ThemeProvider } from '@/src/context/ThemeContext'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, token, loading } = useAuth()
@@ -23,5 +24,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <ThemeProvider>
+      {children}
+    </ThemeProvider>
+  )
 }

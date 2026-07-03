@@ -56,50 +56,150 @@ def test_listar_usuarios():
     assert len(usuarios) >= 1  # admin seed pre-cargado
 
 
-# ── InMemorySessionStore — MFA ────────────────────────────────────────────────
+# ── InMemorySessionStore — MFA (roles sin código real, ej. clientes) ─────────
 
-def test_mfa_token_ya_usado_retorna_none():
-    """Línea 164 (record.usado): token MFA ya consumido → None."""
+def test_mfa_token_ya_usado_retorna_token_invalido():
+    """token MFA ya consumido → TOKEN_INVALIDO."""
     store = InMemorySessionStore()
-    token = store.crear_mfa_session("u-1")
+    token, codigo = store.crear_mfa_session("u-1")
     # Primer uso OK
-    assert store.verificar_mfa(token, "123456") == "u-1"
-    # Segundo uso → None
-    assert store.verificar_mfa(token, "123456") is None
+    assert store.verificar_mfa(token, "123456") == ("EXITOSO", "u-1")
+    # Segundo uso → inválido
+    resultado, usuario_id = store.verificar_mfa(token, "123456")
+    assert resultado == "TOKEN_INVALIDO"
 
 
-def test_mfa_token_expirado_retorna_none():
-    """Líneas 165-166: MFA TTL expirado → None."""
+def test_mfa_token_expirado_retorna_expirado():
+    """MFA TTL expirado → EXPIRADO."""
     store = InMemorySessionStore()
-    token = store.crear_mfa_session("u-2")
-    # Forzar expiración
+    token, _ = store.crear_mfa_session("u-2")
     store._mfa[token].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
-    assert store.verificar_mfa(token, "123456") is None
+    resultado, usuario_id = store.verificar_mfa(token, "123456")
+    assert resultado == "EXPIRADO"
+    assert usuario_id == "u-2"
 
 
-def test_mfa_intentos_maximos_retorna_none():
-    """Líneas 167-168: MAX_MFA_INTENTOS alcanzado → None."""
+def test_mfa_intentos_maximos_retorna_bloqueado():
+    """MAX_MFA_INTENTOS alcanzado → BLOQUEADO (coincide con el bloqueo cross-sesión,
+    ambos umbrales están fijados en 5 — ver ADR-011)."""
     store = InMemorySessionStore()
-    token = store.crear_mfa_session("u-3")
-    # Agotar intentos con código no numérico (len 3, fuerza incremento)
-    for _ in range(store.MAX_MFA_INTENTOS):
-        store.verificar_mfa(token, "abc")  # código inválido → incrementa contador
-    assert store.verificar_mfa(token, "123456") is None  # intentos agotados
+    token, _ = store.crear_mfa_session("u-3")
+    for _ in range(store.MAX_MFA_INTENTOS - 1):
+        resultado, _ = store.verificar_mfa(token, "abc")
+        assert resultado == "CODIGO_INCORRECTO"
+    resultado, _ = store.verificar_mfa(token, "abc")  # intento número MAX_MFA_INTENTOS
+    assert resultado == "BLOQUEADO"
 
 
 def test_mfa_codigo_invalido_incrementa_intentos():
-    """Líneas 170-171: código no 6 dígitos → incrementa intentos_fallidos."""
+    """Código no 6 dígitos → incrementa intentos_fallidos, resultado CODIGO_INCORRECTO."""
     store = InMemorySessionStore()
-    token = store.crear_mfa_session("u-4")
-    resultado = store.verificar_mfa(token, "abc")  # código inválido
-    assert resultado is None
+    token, _ = store.crear_mfa_session("u-4")
+    resultado, usuario_id = store.verificar_mfa(token, "abc")
+    assert resultado == "CODIGO_INCORRECTO"
+    assert usuario_id == "u-4"
     assert store._mfa[token].intentos_fallidos == 1
 
 
-def test_mfa_token_inexistente_retorna_none():
-    """Línea 162: token no registrado → None."""
+def test_mfa_token_inexistente_retorna_token_invalido():
+    """Token no registrado → TOKEN_INVALIDO, sin usuario_id (nada que auditar)."""
     store = InMemorySessionStore()
-    assert store.verificar_mfa("token-inventado", "123456") is None
+    resultado, usuario_id = store.verificar_mfa("token-inventado", "123456")
+    assert resultado == "TOKEN_INVALIDO"
+    assert usuario_id is None
+
+
+# ── InMemorySessionStore — MFA con código real (SUPERADMIN/ADMINISTRADOR) ────
+
+def test_mfa_codigo_real_generado_tiene_6_digitos():
+    store = InMemorySessionStore()
+    _, codigo = store.crear_mfa_session("u-admin", requiere_codigo_real=True)
+    assert codigo is not None
+    assert len(codigo) == 6
+    assert codigo.isdigit()
+
+
+def test_mfa_codigo_real_correcto_pasa():
+    store = InMemorySessionStore()
+    token, codigo = store.crear_mfa_session("u-admin", requiere_codigo_real=True)
+    resultado, usuario_id = store.verificar_mfa(token, codigo)
+    assert resultado == "EXITOSO"
+    assert usuario_id == "u-admin"
+
+
+def test_mfa_codigo_real_incorrecto_falla():
+    store = InMemorySessionStore()
+    token, codigo = store.crear_mfa_session("u-admin", requiere_codigo_real=True)
+    otro_codigo = f"{(int(codigo) + 1) % 1_000_000:06d}"
+    resultado, usuario_id = store.verificar_mfa(token, otro_codigo)
+    assert resultado == "CODIGO_INCORRECTO"
+
+
+def test_mfa_codigo_real_nunca_se_guarda_en_claro():
+    store = InMemorySessionStore()
+    token, codigo = store.crear_mfa_session("u-admin", requiere_codigo_real=True)
+    assert store._mfa[token].codigo_hash != codigo
+    assert codigo not in store._mfa[token].codigo_hash
+
+
+def test_mfa_codigo_generado_tiene_distribucion_csprng():
+    """generar_codigo_mfa usa secrets.randbelow — no debe repetir siempre el mismo valor."""
+    from api.auth_stores import generar_codigo_mfa
+    codigos = {generar_codigo_mfa() for _ in range(20)}
+    assert len(codigos) > 1
+
+
+# ── InMemorySessionStore — bloqueo temporal cross-sesión (ADR-011) ───────────
+
+def _codigo_incorrecto(codigo: str) -> str:
+    return f"{(int(codigo) + 1) % 1_000_000:06d}"
+
+
+def test_mfa_bloqueo_tras_intentos_fallidos_consecutivos():
+    store = InMemorySessionStore()
+    for _ in range(store.MFA_LOCKOUT_INTENTOS):
+        token, codigo = store.crear_mfa_session("u-lockout", requiere_codigo_real=True)
+        resultado, _ = store.verificar_mfa(token, _codigo_incorrecto(codigo))
+        assert resultado in ("CODIGO_INCORRECTO", "BLOQUEADO")
+    assert store.usuario_bloqueado_mfa("u-lockout") is not None
+
+
+def test_mfa_bloqueo_impide_nuevos_intentos_aunque_el_codigo_sea_correcto():
+    store = InMemorySessionStore()
+    for _ in range(store.MFA_LOCKOUT_INTENTOS):
+        token, codigo = store.crear_mfa_session("u-lockout2", requiere_codigo_real=True)
+        store.verificar_mfa(token, _codigo_incorrecto(codigo))
+
+    token, codigo = store.crear_mfa_session("u-lockout2", requiere_codigo_real=True)
+    resultado, _ = store.verificar_mfa(token, codigo)  # código correcto, pero bloqueado
+    assert resultado == "BLOQUEADO"
+
+
+def test_mfa_intentos_agotados_en_sesion_sin_bloqueo_cross_sesion():
+    """
+    Rama distinta del bloqueo cross-sesión: una sesión MFA individual que
+    acumuló MAX_MFA_INTENTOS fallos (ej. reutilizada tras que el contador
+    cross-sesión del usuario se reseteó por un login exitoso en otra sesión)
+    debe bloquearse igual, aunque usuario_bloqueado_mfa() sea None.
+    """
+    store = InMemorySessionStore()
+    token, _ = store.crear_mfa_session("u-6")
+    store._mfa[token].intentos_fallidos = store.MAX_MFA_INTENTOS
+    assert store.usuario_bloqueado_mfa("u-6") is None  # sin bloqueo cross-sesión
+    resultado, usuario_id = store.verificar_mfa(token, "123456")
+    assert resultado == "BLOQUEADO"
+    assert usuario_id == "u-6"
+
+
+def test_mfa_exito_resetea_contador_de_fallos():
+    store = InMemorySessionStore()
+    token, codigo = store.crear_mfa_session("u-reset", requiere_codigo_real=True)
+    store.verificar_mfa(token, _codigo_incorrecto(codigo))  # 1 fallo
+
+    token2, codigo2 = store.crear_mfa_session("u-reset", requiere_codigo_real=True)
+    resultado, _ = store.verificar_mfa(token2, codigo2)
+    assert resultado == "EXITOSO"
+    assert store._mfa_fallos_usuario.get("u-reset", 0) == 0
 
 
 # ── InMemorySessionStore — Refresh ────────────────────────────────────────────

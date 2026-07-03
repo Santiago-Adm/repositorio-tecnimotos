@@ -117,3 +117,21 @@ def require_roles(*roles: str) -> Callable:
         return payload
 
     return _checker
+
+
+def issue_impersonation_token(private_key: str, user_id: str, rol: str, auditor_id: str, token_version: int = 0) -> str:
+    """Emite JWT RS256 de acceso para suplantación (15 minutos) con claims is_impersonated y auditor_id."""
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "sub": user_id,
+            "rol": rol,
+            "token_version": token_version,
+            "iat": now,
+            "exp": now + timedelta(minutes=15),
+            "is_impersonated": True,
+            "auditor_id": auditor_id,
+        },
+        private_key,
+        algorithm="RS256",
+    )

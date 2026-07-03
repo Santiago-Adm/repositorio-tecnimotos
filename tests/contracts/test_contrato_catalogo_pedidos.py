@@ -26,7 +26,7 @@ def _repuesto_fixture() -> Repuesto:
     return Repuesto(
         codigo="REP-001",
         nombre="Filtro",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2019,
         categoria=CategoriaRepuesto.MOTOR,

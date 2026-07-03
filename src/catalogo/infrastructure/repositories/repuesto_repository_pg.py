@@ -112,6 +112,7 @@ class RepuestoRepositoryPG:
         model.descripcion = repuesto.descripcion
         model.precio_venta = repuesto.precio_venta
         model.activo = repuesto.activo
+        model.imagen_url = repuesto.imagen_url
         model.eliminado_en = repuesto.eliminado_en
         model.updated_at = repuesto.updated_at
 
@@ -158,6 +159,7 @@ class RepuestoRepositoryPG:
             categoria=repuesto.categoria.value,
             precio_venta=repuesto.precio_venta,
             activo=repuesto.activo,
+            imagen_url=repuesto.imagen_url,
             eliminado_en=repuesto.eliminado_en,
         )
 
@@ -173,6 +175,7 @@ class RepuestoRepositoryPG:
             categoria=CategoriaRepuesto(model.categoria),
             precio_venta=Decimal(str(model.precio_venta)),
             activo=model.activo,
+            imagen_url=model.imagen_url,
             eliminado_en=model.eliminado_en if isinstance(model.eliminado_en, datetime)
             else (datetime.fromisoformat(str(model.eliminado_en)) if model.eliminado_en else None),
         )

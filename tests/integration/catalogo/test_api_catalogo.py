@@ -21,7 +21,7 @@ async def client_with_data(app_client):
     repuesto = Repuesto(
         codigo="REP-001",
         nombre="Filtro de aceite Bajaj RE",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2019,
         categoria=CategoriaRepuesto.MOTOR,
@@ -57,20 +57,20 @@ async def test_health_responde_ok(app_client):
 async def test_ep_cat_01_busca_por_universo(client_with_data):
     """EP-CAT-01: búsqueda por universo — solo retorna el universo solicitado."""
     response = await client_with_data.get(
-        "/v1/repuestos", params={"universo": "mototaxi"}
+        "/v1/repuestos", params={"universo": "mototaxi_3r"}
     )
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["total"] == 1
     repuestos = data["repuestos"]
-    assert all(r["universo"] == "mototaxi" for r in repuestos)
+    assert all(r["universo"] == "mototaxi_3r" for r in repuestos)
 
 
 @pytest.mark.asyncio
 async def test_ep_cat_01_no_incluye_precio_venta(client_with_data):
     """EP-CAT-01: NUNCA devuelve precio_venta (03 §6.2 regla crítica)."""
     response = await client_with_data.get(
-        "/v1/repuestos", params={"universo": "mototaxi"}
+        "/v1/repuestos", params={"universo": "mototaxi_3r"}
     )
     repuestos = response.json()["data"]["repuestos"]
     for r in repuestos:
@@ -81,7 +81,7 @@ async def test_ep_cat_01_no_incluye_precio_venta(client_with_data):
 async def test_ep_cat_01_separacion_universos_rnn05(client_with_data):
     """RNN-05: mototaxi y motolineal nunca se mezclan."""
     resp_mt = await client_with_data.get(
-        "/v1/repuestos", params={"universo": "mototaxi"}
+        "/v1/repuestos", params={"universo": "mototaxi_3r"}
     )
     resp_ml = await client_with_data.get(
         "/v1/repuestos", params={"universo": "motolineal"}
@@ -146,7 +146,7 @@ async def test_ep_cat_03_crea_repuesto(app_client):
         json={
             "codigo": "REP-NEW-001",
             "nombre": "Repuesto nuevo",
-            "universo": "mototaxi",
+            "universo": "mototaxi_3r",
             "modelo": "Bajaj RE",
             "año": 2021,
             "categoria": "motor",
@@ -263,7 +263,7 @@ async def test_ep_cat_05_codigo_inexistente_404(app_client):
 async def test_respuesta_incluye_envelope(client_with_data):
     """Toda respuesta incluye envelope {data, meta} (03 §6.8)."""
     response = await client_with_data.get(
-        "/v1/repuestos", params={"universo": "mototaxi"}
+        "/v1/repuestos", params={"universo": "mototaxi_3r"}
     )
     body = response.json()
     assert "data" in body
@@ -276,6 +276,6 @@ async def test_respuesta_incluye_envelope(client_with_data):
 async def test_header_x_request_id(client_with_data):
     """CorrelationMiddleware añade X-Request-ID en la respuesta (02 §1.6)."""
     response = await client_with_data.get(
-        "/v1/repuestos", params={"universo": "mototaxi"}
+        "/v1/repuestos", params={"universo": "mototaxi_3r"}
     )
     assert "x-request-id" in response.headers

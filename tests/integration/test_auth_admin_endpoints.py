@@ -4,8 +4,33 @@ Todos pasan con la misma infraestructura InMemory + test keypair del conftest.
 """
 from __future__ import annotations
 
+import re
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from tests.integration.conftest import make_test_token
+
+
+async def _login_y_obtener_codigo_mfa(
+    client, email: str = "admin@tecnimotos.test", password: str = "admin123"
+) -> tuple[str, str]:
+    """
+    Login capturando el código MFA real enviado por correo (ADR-011:
+    ADMINISTRADOR/SUPERADMIN requieren código real — se mockea enviar_correo
+    para extraer el código sin depender de un proveedor de email real).
+    Retorna (mfa_session_token, codigo).
+    """
+    with patch("api.routes.auth_routes.enviar_correo", new=AsyncMock()) as mock_enviar:
+        login_r = await client.post(
+            "/v1/auth/login", json={"email": email, "password": password}
+        )
+    mfa_token = login_r.json()["data"]["mfa_session_token"]
+    if mock_enviar.await_args:
+        cuerpo = mock_enviar.await_args.args[2]
+        codigo = re.search(r"\b(\d{6})\b", cuerpo).group(1)
+    else:
+        codigo = "123456"  # rol sin MFA real — cualquier código de 6 dígitos pasa
+    return mfa_token, codigo
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -53,14 +78,11 @@ async def test_auth01_email_inexistente_retorna_401_igual(app_client):
 
 @pytest.mark.asyncio
 async def test_auth02_mfa_correcto_retorna_access_token_y_cookie(app_client):
-    """EP-AUTH-02: mfa_session_token válido + código 6 dígitos → access_token + refresh_cookie."""
-    login_r = await app_client.post("/v1/auth/login", json={
-        "email": "admin@tecnimotos.test", "password": "admin123",
-    })
-    mfa_token = login_r.json()["data"]["mfa_session_token"]
+    """EP-AUTH-02: mfa_session_token válido + código correcto → access_token + refresh_cookie."""
+    mfa_token, codigo = await _login_y_obtener_codigo_mfa(app_client)
 
     r = await app_client.post("/v1/auth/mfa", json={
-        "mfa_session_token": mfa_token, "totp_code": "123456",
+        "mfa_session_token": mfa_token, "totp_code": codigo,
     })
     assert r.status_code == 200
     data = r.json()["data"]
@@ -81,17 +103,14 @@ async def test_auth02_mfa_token_invalido_retorna_401(app_client):
 @pytest.mark.asyncio
 async def test_auth02_mfa_token_ya_usado_retorna_401(app_client):
     """EP-AUTH-02: mfa_session_token ya consumido → 401 (replay)."""
-    login_r = await app_client.post("/v1/auth/login", json={
-        "email": "admin@tecnimotos.test", "password": "admin123",
-    })
-    mfa_token = login_r.json()["data"]["mfa_session_token"]
+    mfa_token, codigo = await _login_y_obtener_codigo_mfa(app_client)
     # Primer uso — OK
     await app_client.post("/v1/auth/mfa", json={
-        "mfa_session_token": mfa_token, "totp_code": "654321",
+        "mfa_session_token": mfa_token, "totp_code": codigo,
     })
     # Segundo uso — debe fallar
     r = await app_client.post("/v1/auth/mfa", json={
-        "mfa_session_token": mfa_token, "totp_code": "654321",
+        "mfa_session_token": mfa_token, "totp_code": codigo,
     })
     assert r.status_code == 401
 
@@ -102,12 +121,9 @@ async def test_auth02_mfa_token_ya_usado_retorna_401(app_client):
 
 async def _obtener_refresh_cookie(client) -> str:
     """Helper: login + mfa completo → refresh_token cookie."""
-    login_r = await client.post("/v1/auth/login", json={
-        "email": "admin@tecnimotos.test", "password": "admin123",
-    })
-    mfa_token = login_r.json()["data"]["mfa_session_token"]
+    mfa_token, codigo = await _login_y_obtener_codigo_mfa(client)
     await client.post("/v1/auth/mfa", json={
-        "mfa_session_token": mfa_token, "totp_code": "000000",
+        "mfa_session_token": mfa_token, "totp_code": codigo,
     })
     return client.cookies.get("refresh_token", "")
 
@@ -357,5 +373,113 @@ async def test_adm05_cliente_no_puede_crear_usuarios(app_client):
         "/v1/admin/usuarios",
         headers={"Authorization": f"Bearer {token}"},
         json={"email": "x@test.com", "nombre": "X", "rol": "VENDEDOR", "password": "pass123456"},
+    )
+    assert r.status_code == 403
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EP-ADM-12 — Impersonación (POST /v1/admin/impersonate)
+# ══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_impersonate_superadmin_exito(app_client):
+    """EP-ADM-12: SUPERADMIN suplanta a cliente activo → 200 y token de impersonación."""
+    # Crear usuario destino
+    target_user = app_client.app.state.user_store.crear_usuario(
+        email="conductor_target@test.com",
+        nombre="Conductor Target",
+        rol="CLIENTE_CONDUCTOR",
+        password="password123",
+    )
+
+    token_superadmin = make_test_token(app_client._test_private_pem, "SUPERADMIN", sub="admin-super")
+    r = await app_client.post(
+        "/v1/admin/impersonate",
+        headers={"Authorization": f"Bearer {token_superadmin}"},
+        json={"user_id": target_user.usuario_id},
+    )
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert "access_token" in data
+    assert data["token_type"] == "Bearer"
+    assert data["user"]["usuario_id"] == target_user.usuario_id
+    assert data["user"]["rol"] == "CLIENTE_CONDUCTOR"
+
+    # Verificar claims del token generado
+    from api.auth import verify_token
+    payload = verify_token(data["access_token"], app_client.app.state.jwt_public_key)
+    assert payload["sub"] == target_user.usuario_id
+    assert payload["rol"] == "CLIENTE_CONDUCTOR"
+    assert payload["is_impersonated"] is True
+    assert payload["auditor_id"] == "admin-super"
+
+
+@pytest.mark.asyncio
+async def test_impersonate_no_superadmin_forbidden(app_client):
+    """EP-ADM-12: Rol distinto de SUPERADMIN (ej: ADMINISTRADOR) → 403."""
+    target_user = app_client.app.state.user_store.crear_usuario(
+        email="conductor_forbidden@test.com",
+        nombre="Conductor Forbidden",
+        rol="CLIENTE_CONDUCTOR",
+        password="password123",
+    )
+
+    # El token por defecto del app_client es ADMINISTRADOR
+    r = await app_client.post(
+        "/v1/admin/impersonate",
+        json={"user_id": target_user.usuario_id},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_impersonate_usuario_inexistente_retorna_404(app_client):
+    """EP-ADM-12: Usuario inexistente → 404."""
+    token_superadmin = make_test_token(app_client._test_private_pem, "SUPERADMIN", sub="admin-super")
+    r = await app_client.post(
+        "/v1/admin/impersonate",
+        headers={"Authorization": f"Bearer {token_superadmin}"},
+        json={"user_id": "id-inexistente-123"},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_impersonate_target_superadmin_prohibido(app_client):
+    """EP-ADM-12: Intentar suplantar a otro SUPERADMIN → 403."""
+    # Crear otro superadmin
+    target_super = app_client.app.state.user_store.crear_usuario(
+        email="otro_super@test.com",
+        nombre="Otro Super",
+        rol="SUPERADMIN",
+        password="password123",
+    )
+
+    token_superadmin = make_test_token(app_client._test_private_pem, "SUPERADMIN", sub="admin-super")
+    r = await app_client.post(
+        "/v1/admin/impersonate",
+        headers={"Authorization": f"Bearer {token_superadmin}"},
+        json={"user_id": target_super.usuario_id},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_impersonate_target_no_activo_prohibido(app_client):
+    """EP-ADM-12: Intentar suplantar usuario con cuenta no activa → 403."""
+    target_user = app_client.app.state.user_store.crear_usuario(
+        email="conductor_inactivo@test.com",
+        nombre="Conductor Inactivo",
+        rol="CLIENTE_CONDUCTOR",
+        password="password123",
+    )
+    # Marcar no activo / pendiente
+    target_user.estado_cuenta = "PENDIENTE_DOCUMENTOS"
+
+    token_superadmin = make_test_token(app_client._test_private_pem, "SUPERADMIN", sub="admin-super")
+    r = await app_client.post(
+        "/v1/admin/impersonate",
+        headers={"Authorization": f"Bearer {token_superadmin}"},
+        json={"user_id": target_user.usuario_id},
     )
     assert r.status_code == 403

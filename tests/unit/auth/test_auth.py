@@ -53,7 +53,7 @@ async def auth_client():
 
 _CREAR_BODY = {
     "codigo": "AUTH-001", "nombre": "Repuesto Auth",
-    "universo": "mototaxi", "modelo": "Bajaj RE",
+    "universo": "mototaxi_3r", "modelo": "Bajaj RE",
     "año": 2021, "categoria": "motor", "precio_venta": "45.00",
 }
 
@@ -142,7 +142,7 @@ async def test_administrador_puede_crear_repuesto(auth_client):
     r = await auth_client.post(
         "/v1/repuestos",
         headers={"Authorization": f"Bearer {token}"},
-        json={"codigo": "ADM-001", "nombre": "Bujía", "universo": "mototaxi",
+        json={"codigo": "ADM-001", "nombre": "Bujía", "universo": "mototaxi_3r",
               "modelo": "Bajaj RE", "año": 2021, "categoria": "motor", "precio_venta": "18.00"},
     )
     assert r.status_code == 201
@@ -165,7 +165,7 @@ async def test_superadmin_puede_crear_repuesto(auth_client):
 @pytest.mark.asyncio
 async def test_endpoint_publico_sin_token_funciona(auth_client):
     """Endpoints sin require_roles (GET catálogo) son accesibles sin token."""
-    r = await auth_client.get("/v1/repuestos", params={"universo": "mototaxi"})
+    r = await auth_client.get("/v1/repuestos", params={"universo": "mototaxi_3r"})
     assert r.status_code == 200
 
 
@@ -176,7 +176,7 @@ async def test_vendedor_puede_ver_catalogo(auth_client):
     r = await auth_client.get(
         "/v1/repuestos",
         headers={"Authorization": f"Bearer {token}"},
-        params={"universo": "mototaxi"},
+        params={"universo": "mototaxi_3r"},
     )
     assert r.status_code == 200
 

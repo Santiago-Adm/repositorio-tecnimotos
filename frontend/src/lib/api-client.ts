@@ -13,10 +13,16 @@ export function getStoredToken(): string | null {
 
 export function setStoredToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token)
+  if (typeof document !== 'undefined') {
+    document.cookie = `auth_token=${token}; path=/; SameSite=Strict`
+  }
 }
 
 export function clearStoredToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+  if (typeof document !== 'undefined') {
+    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
+  }
 }
 
 export function decodeJwtPayload(token: string): { sub: string; rol: string; exp: number } {
@@ -68,9 +74,25 @@ async function request<T>(
   return parseEnvelope<T>(res)
 }
 
+async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
+  const token = getStoredToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    credentials: 'include',
+    body: form,
+  })
+
+  return parseEnvelope<T>(res)
+}
+
 export const apiClient = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  postForm: <T>(path: string, form: FormData) => requestForm<T>('POST', path, form),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
 }

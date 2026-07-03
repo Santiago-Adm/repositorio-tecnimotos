@@ -14,8 +14,10 @@ from alembic import context
 from src.shared.infrastructure.database import Base  # noqa: F401 — registra metadata
 import src.shared.infrastructure.models.usuario_model  # noqa: F401
 import src.shared.infrastructure.models.sistema_model   # noqa: F401
+import src.shared.infrastructure.models.mfa_intento_model  # noqa: F401
 import src.catalogo.infrastructure.repositories.models.repuesto_model          # noqa: F401
 import src.catalogo.infrastructure.repositories.models.historial_precio_model  # noqa: F401
+import src.catalogo.infrastructure.repositories.models.imagen_repuesto_model   # noqa: F401
 import src.stock.infrastructure.repositories.models.stock_model                # noqa: F401
 import src.pedidos.infrastructure.repositories.models.pedido_models            # noqa: F401
 import src.taller.infrastructure.repositories.models.taller_models             # noqa: F401

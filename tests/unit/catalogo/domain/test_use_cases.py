@@ -48,7 +48,7 @@ class TestCrearRepuesto:
             CrearRepuestoCommand(
                 codigo="REP-001",
                 nombre="Filtro",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2019,
                 categoria=CategoriaRepuesto.MOTOR,
@@ -66,7 +66,7 @@ class TestCrearRepuesto:
             CrearRepuestoCommand(
                 codigo="REP-002",
                 nombre="Cadena",
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2020,
                 categoria=CategoriaRepuesto.TRANSMISION,
@@ -77,7 +77,7 @@ class TestCrearRepuesto:
         assert len(eventos) == 1
         payload = eventos[0].payload
         assert payload["codigo"] == "REP-002"
-        assert payload["universo"] == "mototaxi"
+        assert payload["universo"] == "mototaxi_3r"
 
 
 class TestBuscarRepuestos:
@@ -88,7 +88,7 @@ class TestBuscarRepuestos:
 
         uc = BuscarRepuestosUseCase(repo)
         result = await uc.execute(
-            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI)
+            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI_3R)
         )
         assert result.total == 1
         assert result.repuestos[0].codigo == "REP-001"
@@ -116,7 +116,7 @@ class TestBuscarRepuestos:
 
         uc = BuscarRepuestosUseCase(repo)
         result = await uc.execute(
-            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI)
+            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI_3R)
         )
         assert result.total == 0
 
@@ -127,7 +127,7 @@ class TestBuscarRepuestos:
         uc = BuscarRepuestosUseCase(repo)
         result = await uc.execute(
             BuscarRepuestosQuery(
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 modelo="Bajaj RE",
                 año=2019,
             )
@@ -141,7 +141,7 @@ class TestBuscarRepuestos:
         uc = BuscarRepuestosUseCase(repo)
         result = await uc.execute(
             BuscarRepuestosQuery(
-                universo=UniversoRepuesto.MOTOTAXI,
+                universo=UniversoRepuesto.MOTOTAXI_3R,
                 año=2025,
             )
         )

@@ -44,7 +44,10 @@ export default function MecanicoJuniorDashboard() {
       <div className="flex">
         {/* Navegación — solo taller (02 §4.1 MECANICO_JUNIOR) */}
         <nav className="hidden md:flex flex-col w-48 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1">
-          <button className="text-left px-3 py-2 rounded-lg text-sm font-body text-teal bg-teal/10">
+          <button
+            onClick={() => { /* única sección — sin más destinos que navegar */ }}
+            className="text-left px-3 py-2 rounded-lg text-sm font-body text-teal bg-teal/10"
+          >
             Mis OTs
           </button>
           {/* Sin "declarar listo" ni "autorizar precio" — componente no existe (02 §4.3, 10 §1.2, 10 §4.7) */}
@@ -64,8 +67,8 @@ export default function MecanicoJuniorDashboard() {
               <ErrorDisplay code={error} onRetry={fetchOrdenes} />
             ) : ordenes.length === 0 ? (
               <EmptyState
-                title="Sin órdenes asignadas"
-                description="El mecánico master te asignará órdenes de trabajo cuando sea necesario."
+                title="Listado de órdenes aún no disponible"
+                description="El backend todavía no expone un endpoint para listar tus órdenes de trabajo asignadas — solo permite consultar una orden si ya conoces su ID. Esta vista quedará activa cuando esa pieza se construya en una sesión de backend."
               />
             ) : (
               <div className="space-y-3">

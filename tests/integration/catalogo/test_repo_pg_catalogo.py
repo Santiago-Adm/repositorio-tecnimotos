@@ -27,7 +27,7 @@ def _make_repuesto(suffix: str = "") -> Repuesto:
     return Repuesto(
         codigo=f"PG-CAT-{uuid.uuid4().hex[:8].upper()}{suffix}",
         nombre=f"Repuesto PG {uuid.uuid4().hex[:4]}",
-        universo=UniversoRepuesto.MOTOTAXI,
+        universo=UniversoRepuesto.MOTOTAXI_3R,
         modelo="Bajaj RE",
         año=2022,
         categoria=CategoriaRepuesto.MOTOR,
@@ -59,7 +59,7 @@ class TestRepuestoRepositoryPG:
         rep = _make_repuesto()
         await repo.guardar(rep)
 
-        resultados = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI)
+        resultados = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI_3R)
         codigos = [r.codigo for r in resultados]
         assert rep.codigo in codigos
 
@@ -95,6 +95,6 @@ class TestRepuestoRepositoryPG:
         rep.activo = False
         await repo.actualizar(rep)
 
-        resultados = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI, solo_disponibles=True)
+        resultados = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI_3R, solo_disponibles=True)
         codigos = [r.codigo for r in resultados]
         assert rep.codigo not in codigos

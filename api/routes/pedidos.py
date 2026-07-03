@@ -1,5 +1,6 @@
 """
-Router FastAPI para el módulo pedidos — 17 endpoints EP-PED-01 a EP-PED-17 (03 §6.3).
+Router FastAPI para el módulo pedidos — 19 endpoints EP-PED-01 a EP-PED-19 (03 §6.3).
+EP-PED-18/19: Plan de mantenimiento preventivo (ciclo 30 días, solo CLIENTE_CONDUCTOR/CLIENTE_RURAL).
 """
 from __future__ import annotations
 
@@ -50,6 +51,12 @@ from src.pedidos.application.use_cases.gestionar_comprobante import (
     RegistrarEnvioUseCase,
     RegistrarIncidenciaUseCase,
 )
+from src.pedidos.application.use_cases.gestionar_plan_mantenimiento import (
+    ActivarPlanMantenimientoCommand,
+    ActivarPlanMantenimientoUseCase,
+    CancelarPlanMantenimientoCommand,
+    CancelarPlanMantenimientoUseCase,
+)
 from src.pedidos.domain.models.pedido import (
     ComprobanteNoEncontradoError,
     ComprobanteYaEmitidoError,
@@ -57,6 +64,8 @@ from src.pedidos.domain.models.pedido import (
     EstadoComprobante,
     ListaReservaNoEncontradaError,
     PedidoNoEncontradoError,
+    PlanMantenimientoNoEncontradoError,
+    PlanYaActivoError,
     ProformaNoEncontradaError,
     ReservaNoEncontradaError,
     SegmentoCliente,
@@ -662,3 +671,93 @@ async def anular_comprobante(
         {"comprobante_id": comp.id, "estado": comp.estado.value, "nota_credito_id": comp.nota_credito_id},
         request_id=get_request_id(request),
     )
+
+
+# ── Plan de mantenimiento preventivo ─────────────────────────────────────────
+
+_ROLES_PLAN_MANTENIMIENTO = ("CLIENTE_CONDUCTOR", "CLIENTE_RURAL")
+
+
+class ActivarPlanRequest(BaseModel):
+    vehiculo_id: str = Field(min_length=1)
+
+
+def _plan_to_dict(plan) -> dict[str, Any]:
+    return {
+        "plan_id": plan.id,
+        "cliente_id": plan.cliente_id,
+        "vehiculo_id": plan.vehiculo_id,
+        "estado": plan.estado.value,
+        "fecha_activacion": plan.fecha_activacion.isoformat(),
+        "fecha_ultimo_recordatorio": (
+            plan.fecha_ultimo_recordatorio.isoformat()
+            if plan.fecha_ultimo_recordatorio else None
+        ),
+        "proximo_recordatorio": plan.proximo_recordatorio().isoformat(),
+    }
+
+
+@router.post(
+    "/pedidos/plan-mantenimiento",
+    summary="EP-PED-18: Activar plan de mantenimiento",
+    status_code=status.HTTP_201_CREATED,
+)
+async def activar_plan_mantenimiento(
+    request: Request,
+    body: ActivarPlanRequest,
+    _auth: dict = Depends(require_roles(*_ROLES_PLAN_MANTENIMIENTO)),
+) -> dict[str, Any]:
+    """
+    CLIENTE_CONDUCTOR · CLIENTE_RURAL.
+    Activa un plan de mantenimiento preventivo con ciclo de 30 días.
+    Un vehículo solo puede tener un plan ACTIVO a la vez.
+    """
+    cliente_id = getattr(request.state, "user_id", "")
+    repo = _get_repo(request)
+    uc = ActivarPlanMantenimientoUseCase(repo)
+    try:
+        plan = await uc.execute(ActivarPlanMantenimientoCommand(
+            cliente_id=cliente_id,
+            vehiculo_id=body.vehiculo_id,
+        ))
+    except PlanYaActivoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("PLAN_YA_ACTIVO", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(_plan_to_dict(plan), request_id=get_request_id(request))
+
+
+@router.post(
+    "/pedidos/plan-mantenimiento/{plan_id}/cancelar",
+    summary="EP-PED-19: Cancelar plan de mantenimiento",
+)
+async def cancelar_plan_mantenimiento(
+    request: Request,
+    plan_id: str,
+    _auth: dict = Depends(require_roles(*_ROLES_PLAN_MANTENIMIENTO)),
+) -> dict[str, Any]:
+    """
+    CLIENTE_CONDUCTOR · CLIENTE_RURAL.
+    Cancela el plan; los recordatorios futuros se detienen inmediatamente.
+    Solo el propietario del plan puede cancelarlo.
+    """
+    cliente_id = getattr(request.state, "user_id", "")
+    repo = _get_repo(request)
+    uc = CancelarPlanMantenimientoUseCase(repo)
+    try:
+        plan = await uc.execute(CancelarPlanMantenimientoCommand(
+            plan_id=plan_id,
+            cliente_id=cliente_id,
+        ))
+    except PlanMantenimientoNoEncontradoError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"Plan {plan_id} no encontrado", request_id=get_request_id(request)),
+        )
+    except DomainError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(_plan_to_dict(plan), request_id=get_request_id(request))

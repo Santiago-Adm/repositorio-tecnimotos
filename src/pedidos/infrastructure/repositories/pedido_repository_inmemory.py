@@ -10,6 +10,8 @@ from src.pedidos.domain.models.pedido import (
     ListaReservaProg,
     Pedido,
     PedidoNoEncontradoError,
+    PlanMantenimiento,
+    EstadoPlanMantenimiento,
     Proforma,
     Reserva,
 )
@@ -26,6 +28,7 @@ class InMemoryPedidoRepository:
         self._comprobantes: dict[str, Comprobante] = {}
         self._deudas: dict[str, DeudaActiva] = {}
         self._listas: dict[str, ListaReservaProg] = {}
+        self._planes: dict[str, PlanMantenimiento] = {}
 
     # ── Pedidos ───────────────────────────────────────────────────────────────
 
@@ -99,6 +102,9 @@ class InMemoryPedidoRepository:
         self._comprobantes[comp.id] = comp
         return comp
 
+    async def listar_comprobantes(self) -> list[Comprobante]:
+        return list(self._comprobantes.values())
+
     # ── Deudas ────────────────────────────────────────────────────────────────
 
     async def guardar_deuda(self, deuda: DeudaActiva) -> DeudaActiva:
@@ -120,6 +126,35 @@ class InMemoryPedidoRepository:
         self._listas[lista.id] = lista
         return lista
 
+    # ── Planes de mantenimiento ───────────────────────────────────────────────
+
+    async def guardar_plan_mantenimiento(self, plan: PlanMantenimiento) -> PlanMantenimiento:
+        self._planes[plan.id] = plan
+        return plan
+
+    async def obtener_plan_mantenimiento(self, plan_id: str) -> Optional[PlanMantenimiento]:
+        return self._planes.get(plan_id)
+
+    async def obtener_plan_activo_por_cliente(
+        self, cliente_id: str, vehiculo_id: str
+    ) -> Optional[PlanMantenimiento]:
+        return next(
+            (
+                p for p in self._planes.values()
+                if p.cliente_id == cliente_id
+                and p.vehiculo_id == vehiculo_id
+                and p.estado == EstadoPlanMantenimiento.ACTIVO
+            ),
+            None,
+        )
+
+    async def listar_planes_activos(self) -> list[PlanMantenimiento]:
+        return [p for p in self._planes.values() if p.estado == EstadoPlanMantenimiento.ACTIVO]
+
+    async def actualizar_plan_mantenimiento(self, plan: PlanMantenimiento) -> PlanMantenimiento:
+        self._planes[plan.id] = plan
+        return plan
+
     def limpiar(self) -> None:
         self._pedidos.clear()
         self._reservas.clear()
@@ -128,3 +163,4 @@ class InMemoryPedidoRepository:
         self._comprobantes.clear()
         self._deudas.clear()
         self._listas.clear()
+        self._planes.clear()

@@ -12,7 +12,7 @@ from src.catalogo.domain.services.repuesto_service import RepuestoService
 class TestValidarSeparacionUniverso:
     def test_universo_correcto_no_lanza(self, repuesto_mototaxi):
         RepuestoService.validar_separacion_universo(
-            repuesto_mototaxi, UniversoRepuesto.MOTOTAXI
+            repuesto_mototaxi, UniversoRepuesto.MOTOTAXI_3R
         )
 
     def test_universo_incorrecto_lanza_error(self, repuesto_mototaxi):

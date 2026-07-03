@@ -33,12 +33,25 @@ class Settings(BaseSettings):
 
     fernet_key: str = Field(default="")
 
+    superadmin_bootstrap_key: str = Field(default="")
+
     whatsapp_api_token: str = Field(default="")
     whatsapp_phone_number_id: str = Field(default="")
 
     sms_provider: str = Field(default="twilio")
     sms_api_key: str = Field(default="")
     sms_account_sid: str = Field(default="")
+
+    r2_account_id: str = Field(default="")
+    r2_endpoint: str = Field(default="")
+    r2_bucket_name: str = Field(default="")
+    r2_public_url: str = Field(default="")
+    r2_access_key_id: str = Field(default="")
+    r2_secret_access_key: str = Field(default="")
+
+    # MFA por correo — ADR-011. Resend HTTP API (Railway no da SMTP propio).
+    resend_api_key: str = Field(default="")
+    mfa_email_from: str = Field(default="Tecnimotos <onboarding@resend.dev>")
 
 
 @lru_cache

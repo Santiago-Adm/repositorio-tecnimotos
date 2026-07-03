@@ -20,7 +20,7 @@ class TestE2E01CatalogoReserva:
 
     async def test_buscar_repuesto_en_catalogo(self, client_conductor):
         """Paso 1 — EP-CAT-01: listar repuestos activos por universo."""
-        response = await client_conductor.get("/v1/repuestos?universo=mototaxi")
+        response = await client_conductor.get("/v1/repuestos?universo=mototaxi_3r")
         assert response.status_code == 200
         data = response.json()["data"]
         codigos = [r["codigo"] for r in data["repuestos"]]
@@ -63,7 +63,7 @@ class TestE2E01CatalogoReserva:
         Stock adapter refleja la cantidad apartada tras crear reserva.
         """
         # Paso 1 — buscar por universo
-        r1 = await client_conductor.get("/v1/repuestos?universo=mototaxi")
+        r1 = await client_conductor.get("/v1/repuestos?universo=mototaxi_3r")
         assert r1.status_code == 200
         assert any(r["codigo"] == "REP-001" for r in r1.json()["data"]["repuestos"])
 

@@ -1,5 +1,6 @@
 """
-Router FastAPI para el módulo taller — 12 endpoints EP-TAL-01 a EP-TAL-12 (03 §6.5).
+Router FastAPI para el módulo taller — 13 endpoints EP-TAL-01 a EP-TAL-13 (03 §6.5).
+EP-TAL-13: prueba-ruta — registra salud_estimada del vehículo tras intervención.
 """
 from __future__ import annotations
 
@@ -37,6 +38,8 @@ from src.taller.application.use_cases.gestionar_ot import (
     LiberarVehiculoCommand,
     LiberarVehiculoUseCase,
     ObtenerOrdenTrabajoUseCase,
+    RegistrarPruebaRutaCommand,
+    RegistrarPruebaRutaUseCase,
     RevisionFinalCommand,
     RevisionFinalUseCase,
 )
@@ -98,6 +101,9 @@ def _ot_to_dict(ot) -> dict:
             }
             for i in ot.lista_repuestos
         ],
+        "prueba_ruta_completada": ot.prueba_ruta_completada,
+        "observaciones_prueba_ruta": ot.observaciones_prueba_ruta,
+        "salud_resultado": ot.salud_resultado,
         "created_at": ot.created_at.isoformat(),
     }
 
@@ -463,6 +469,64 @@ async def consultar_disponibilidad(request: Request) -> dict[str, Any]:
                 for m in mecanicos
             ],
             "total": len(mecanicos),
+        },
+        request_id=get_request_id(request),
+    )
+
+
+class PruebaRutaRequest(BaseModel):
+    observaciones: Optional[str] = Field(default=None, max_length=2000)
+    salud_declarada: Optional[int] = Field(default=None, ge=0, le=100)
+
+
+@router.post(
+    "/ordenes-trabajo/{ot_id}/prueba-ruta",
+    summary="EP-TAL-13: Registrar prueba de ruta post-reparación",
+)
+async def registrar_prueba_ruta(
+    request: Request,
+    ot_id: str,
+    body: PruebaRutaRequest,
+    _auth: dict = Depends(require_roles("MECANICO_MASTER", "ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    """
+    MECANICO_MASTER · ADMINISTRADOR · SUPERADMIN.
+    Registra el resultado de la prueba de ruta tras cerrar la OT.
+    Requiere OT en estado CERRADA.
+    - Sin observaciones: salud_estimada del vehículo = 100 automático.
+    - Con observaciones: mecánico debe declarar salud_declarada (< 100 por convención).
+    El valor queda visible para el cliente en EP-TAL-12.
+    """
+    repo = _get_repo(request)
+    uc = RegistrarPruebaRutaUseCase(repo)
+    try:
+        ot, vehiculo = await uc.execute(
+            RegistrarPruebaRutaCommand(
+                ot_id=ot_id,
+                observaciones=body.observaciones or None,
+                salud_declarada=body.salud_declarada,
+                actor_id=getattr(request.state, "user_id", ""),
+            )
+        )
+    except OrdenTrabajoNoEncontradaError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"OT {ot_id} no encontrada", request_id=get_request_id(request)),
+        )
+    except VehiculoNoEncontradoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", str(exc), request_id=get_request_id(request)),
+        )
+    except DomainError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(
+        {
+            **_ot_to_dict(ot),
+            "vehiculo_salud_estimada": vehiculo.salud_estimada,
         },
         request_id=get_request_id(request),
     )

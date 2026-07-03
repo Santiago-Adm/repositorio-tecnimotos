@@ -86,7 +86,7 @@ async def test_crear_repuesto_domain_error_retorna_422(app_client):
         new=AsyncMock(side_effect=CatalogoDomainError("código duplicado")),
     ):
         r = await app_client.post("/v1/repuestos", json={
-            "codigo": "DUP-001", "nombre": "Dup", "universo": "mototaxi",
+            "codigo": "DUP-001", "nombre": "Dup", "universo": "mototaxi_3r",
             "modelo": "Bajaj RE", "año": 2021, "categoria": "motor", "precio_venta": "10.00",
         })
     assert r.status_code == 422
@@ -97,7 +97,7 @@ async def test_crear_repuesto_domain_error_retorna_422(app_client):
 async def test_actualizar_precio_repuesto_de_baja_retorna_409(app_client):
     """catalogo.py 326-327: RepuestoDadoDeBajaError en actualizar_precio → 409."""
     await app_client.post("/v1/repuestos", json={
-        "codigo": "BAJA-001", "nombre": "Para baja", "universo": "mototaxi",
+        "codigo": "BAJA-001", "nombre": "Para baja", "universo": "mototaxi_3r",
         "modelo": "Bajaj RE", "año": 2021, "categoria": "motor", "precio_venta": "20.00",
     })
     await app_client.request("DELETE", "/v1/repuestos/BAJA-001", json={"motivo": "test"})
@@ -109,7 +109,7 @@ async def test_actualizar_precio_repuesto_de_baja_retorna_409(app_client):
 async def test_dar_de_baja_repuesto_ya_inactivo_retorna_409(app_client):
     """catalogo.py 378-379: DomainError en dar_de_baja cuando ya está inactivo → 409."""
     await app_client.post("/v1/repuestos", json={
-        "codigo": "BAJA-002", "nombre": "Ya baja", "universo": "mototaxi",
+        "codigo": "BAJA-002", "nombre": "Ya baja", "universo": "mototaxi_3r",
         "modelo": "Bajaj RE", "año": 2022, "categoria": "motor", "precio_venta": "30.00",
     })
     await app_client.request("DELETE", "/v1/repuestos/BAJA-002", json={"motivo": "primera"})

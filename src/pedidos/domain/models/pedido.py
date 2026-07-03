@@ -50,6 +50,14 @@ class ListaReservaNoEncontradaError(DomainError):
     pass
 
 
+class PlanMantenimientoNoEncontradoError(DomainError):
+    pass
+
+
+class PlanYaActivoError(DomainError):
+    pass
+
+
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
 class EstadoPedido(str, Enum):
@@ -112,6 +120,11 @@ class EstadoListaReserva(str, Enum):
     BORRADOR    = "BORRADOR"
     CONFIRMADA  = "CONFIRMADA"
     FORMALIZADA = "FORMALIZADA"
+
+
+class EstadoPlanMantenimiento(str, Enum):
+    ACTIVO    = "ACTIVO"
+    CANCELADO = "CANCELADO"
 
 
 # ── TTL por segmento ──────────────────────────────────────────────────────────
@@ -486,3 +499,43 @@ class Pedido:
 
     def esta_entregado(self) -> bool:
         return self.estado == EstadoPedido.ENTREGADO
+
+
+# ── Plan de mantenimiento ─────────────────────────────────────────────────────
+
+_CICLO_MANTENIMIENTO_DIAS = 30
+
+
+@dataclass
+class PlanMantenimiento:
+    """
+    Plan de mantenimiento preventivo activado voluntariamente por el cliente (02 §5.2).
+    Solo CLIENTE_CONDUCTOR y CLIENTE_RURAL. Ciclo: 30 días desde activación
+    o desde el último recordatorio aceptado.
+    Estado PAUSADO omitido: ningún flujo lo activa en esta versión (PCT 2026-06-28).
+    """
+    cliente_id: str
+    vehiculo_id: str
+    estado: EstadoPlanMantenimiento = EstadoPlanMantenimiento.ACTIVO
+    fecha_activacion: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    fecha_ultimo_recordatorio: Optional[datetime] = None
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def proximo_recordatorio(self) -> datetime:
+        base = self.fecha_ultimo_recordatorio or self.fecha_activacion
+        return base + timedelta(days=_CICLO_MANTENIMIENTO_DIAS)
+
+    def necesita_recordatorio(self) -> bool:
+        return (
+            self.estado == EstadoPlanMantenimiento.ACTIVO
+            and datetime.now(timezone.utc) >= self.proximo_recordatorio()
+        )
+
+    def registrar_recordatorio(self) -> None:
+        self.fecha_ultimo_recordatorio = datetime.now(timezone.utc)
+
+    def cancelar(self) -> None:
+        if self.estado != EstadoPlanMantenimiento.ACTIVO:
+            raise DomainError("Solo se puede cancelar un plan ACTIVO")
+        self.estado = EstadoPlanMantenimiento.CANCELADO
