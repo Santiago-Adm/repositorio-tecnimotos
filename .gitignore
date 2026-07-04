@@ -35,6 +35,7 @@ dist/
 .pytest_cache/
 .coverage
 VERIFICACION_MANUAL.md
+levantar-sistema.md
 
 # Documentación privada / personal
 .doc3/
