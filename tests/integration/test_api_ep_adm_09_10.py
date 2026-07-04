@@ -60,6 +60,18 @@ async def test_adm09_respuesta_incluye_variante_tema(app_client):
 
 
 @pytest.mark.asyncio
+async def test_adm09_respuesta_incluye_activo(app_client):
+    """EP-ADM-09 expone `activo` (ADR-016) — la UI de suspender/reactivar
+    depende de este campo para reflejar el estado real (bug real encontrado
+    y corregido: el endpoint nunca lo devolvía)."""
+    r = await app_client.get("/v1/admin/usuarios")
+    assert r.status_code == 200
+    for u in r.json()["data"]["usuarios"]:
+        assert "activo" in u
+        assert isinstance(u["activo"], bool)
+
+
+@pytest.mark.asyncio
 async def test_adm09_rbac_vendedor_bloqueado(app_client):
     """VENDEDOR no puede acceder al listado general."""
     token = make_test_token(app_client._test_private_pem, "VENDEDOR")

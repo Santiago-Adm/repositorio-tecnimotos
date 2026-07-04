@@ -105,6 +105,27 @@ class InMemoryPedidoRepository:
     async def listar_comprobantes(self) -> list[Comprobante]:
         return list(self._comprobantes.values())
 
+    # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
+
+    async def obtener_cliente_id_por_usuario(self, usuario_id: str) -> Optional[str]:
+        """InMemory no modela `Cliente` como entidad propia (solo existe la fila
+        real `cliente` en Postgres, ver ClienteRepositoryPG) — sin PG no hay
+        vínculo usuario→cliente que resolver, se retorna None a propósito."""
+        return None
+
+    async def tiene_actividad_cliente(self, cliente_id: str) -> bool:
+        """True si el cliente tiene algún pedido/reserva/deuda/lista real —
+        usado para bloquear el DELETE físico de usuario (ADR-016)."""
+        if any(p.cliente_id == cliente_id for p in self._pedidos.values()):
+            return True
+        if any(r.cliente_id == cliente_id for r in self._reservas.values()):
+            return True
+        if any(d.cliente_id == cliente_id for d in self._deudas.values()):
+            return True
+        if any(l.cliente_id == cliente_id for l in self._listas.values()):
+            return True
+        return False
+
     # ── Deudas ────────────────────────────────────────────────────────────────
 
     async def guardar_deuda(self, deuda: DeudaActiva) -> DeudaActiva:

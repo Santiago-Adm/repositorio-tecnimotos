@@ -8,6 +8,7 @@ import { ApiCallError } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
 import BiPanel from '@/src/components/dashboard/BiPanel'
+import UsuariosManager from '@/src/components/dashboard/UsuariosManager'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
@@ -80,7 +81,7 @@ export default function AdministradorDashboard() {
         </nav>
 
         <main className="flex-1 p-6 space-y-6">
-          {seccion !== 'Stock' && seccion !== 'Categorías' && seccion !== 'Panel BI' && (
+          {seccion !== 'Stock' && seccion !== 'Categorías' && seccion !== 'Panel BI' && seccion !== 'Admin' && (
             <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
               <p className="text-slate-400 font-body text-sm">
                 Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
@@ -91,6 +92,13 @@ export default function AdministradorDashboard() {
           {seccion === 'Panel BI' && <BiPanel />}
 
           {seccion === 'Categorías' && <CategoriasManager />}
+
+          {seccion === 'Admin' && (
+            <section>
+              <h2 className="font-display text-lg font-semibold text-slate-100 mb-4">Gestión de usuarios</h2>
+              <UsuariosManager />
+            </section>
+          )}
 
           {seccion === 'Stock' && alertas.length > 0 && (
             <section>

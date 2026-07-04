@@ -37,6 +37,7 @@ from src.pedidos.domain.models.pedido import (
     TipoComprobante,
 )
 from src.pedidos.infrastructure.repositories.models.pedido_models import (
+    ClienteModel,
     ComprobanteModel,
     DeudaActivaModel,
     EnvioModel,
@@ -278,6 +279,29 @@ class PedidoRepositoryPG:
             )
             for model in result.scalars().all()
         ]
+
+    # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
+
+    async def tiene_actividad_cliente(self, cliente_id: str) -> bool:
+        """True si el cliente tiene algún pedido/reserva/deuda/lista real —
+        usado para bloquear el DELETE físico de usuario (ADR-016)."""
+        for model, campo in (
+            (PedidoModel, PedidoModel.cliente_id),
+            (ReservaModel, ReservaModel.cliente_id),
+            (DeudaActivaModel, DeudaActivaModel.cliente_id),
+            (ListaReservaProgresivaModel, ListaReservaProgresivaModel.cliente_id),
+        ):
+            stmt = select(model.id).where(campo == cliente_id).limit(1)
+            result = await self._session.execute(stmt)
+            if result.first() is not None:
+                return True
+        return False
+
+    async def obtener_cliente_id_por_usuario(self, usuario_id: str) -> Optional[str]:
+        stmt = select(ClienteModel.id).where(ClienteModel.usuario_id == usuario_id)
+        result = await self._session.execute(stmt)
+        row = result.first()
+        return row[0] if row else None
 
     # ── Deudas ────────────────────────────────────────────────────────────────
 

@@ -309,8 +309,8 @@ async def test_adm04_crea_mecanico_junior_con_supervisor(app_client):
 
 
 @pytest.mark.asyncio
-async def test_adm12_lista_mecanicos_disponibles_con_nombre(app_client):
-    """EP-ADM-12: GET /v1/admin/mecanicos hace join real con usuario.nombre."""
+async def test_adm13_lista_mecanicos_disponibles_con_nombre(app_client):
+    """EP-ADM-13: GET /v1/admin/mecanicos hace join real con usuario.nombre."""
     r = await app_client.post("/v1/admin/mecanicos", json={
         "usuario_id": "user-admin-seed", "nivel": "MASTER",
     })
@@ -327,8 +327,8 @@ async def test_adm12_lista_mecanicos_disponibles_con_nombre(app_client):
 
 
 @pytest.mark.asyncio
-async def test_adm12_usuario_inexistente_hace_fallback_a_usuario_id(app_client):
-    """EP-ADM-12: si el usuario_id no existe en el store, el nombre cae a usuario_id."""
+async def test_adm13_usuario_inexistente_hace_fallback_a_usuario_id(app_client):
+    """EP-ADM-13: si el usuario_id no existe en el store, el nombre cae a usuario_id."""
     r = await app_client.post("/v1/admin/mecanicos", json={
         "usuario_id": "user-fantasma-999", "nivel": "JUNIOR",
     })
@@ -340,8 +340,8 @@ async def test_adm12_usuario_inexistente_hace_fallback_a_usuario_id(app_client):
 
 
 @pytest.mark.asyncio
-async def test_adm12_rbac_vendedor_bloqueado(app_client):
-    """EP-ADM-12: VENDEDOR no puede listar mecánicos."""
+async def test_adm13_rbac_vendedor_bloqueado(app_client):
+    """EP-ADM-13: VENDEDOR no puede listar mecánicos."""
     token = make_test_token(app_client._test_private_pem, "VENDEDOR")
     r = await app_client.get("/v1/admin/mecanicos", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
@@ -386,6 +386,19 @@ async def test_adm05_no_puede_crear_superadmin(app_client):
         "email": "super@test.com",
         "nombre": "Intento Superadmin",
         "rol": "SUPERADMIN",
+        "password": "pass_segura_123",
+    })
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"]["code"] == "VALIDACION_FALLIDA"
+
+
+@pytest.mark.asyncio
+async def test_adm05_no_puede_crear_administrador(app_client):
+    """EP-ADM-05: no puede crear ADMINISTRADOR — rol master (ADR-016)."""
+    r = await app_client.post("/v1/admin/usuarios", json={
+        "email": "otro-admin@test.com",
+        "nombre": "Intento Administrador",
+        "rol": "ADMINISTRADOR",
         "password": "pass_segura_123",
     })
     assert r.status_code == 422

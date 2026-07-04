@@ -237,11 +237,11 @@ async def crear_mecanico(
     )
 
 
-# ── EP-ADM-12 — Listar mecánicos disponibles ─────────────────────────────────
+# ── EP-ADM-13 — Listar mecánicos disponibles ─────────────────────────────────
 
 @router.get(
     "/mecanicos",
-    summary="EP-ADM-12: Listar mecánicos disponibles",
+    summary="EP-ADM-13: Listar mecánicos disponibles",
     tags=["mecanicos"],
 )
 async def listar_mecanicos(
@@ -286,11 +286,16 @@ class CrearUsuarioRequest(BaseModel):
     consentimiento_privacidad: bool = Field(default=False)
 
 
+# ADR-016: SUPERADMIN y ADMINISTRADOR son roles master — nunca se crean,
+# editan ni eliminan desde la UI bajo ninguna circunstancia (solo vía
+# seed/bootstrap). Corregido de un hallazgo real de Fase 0: este endpoint
+# permitía crear ADMINISTRADOR antes de esta sesión.
 _ROLES_VALIDOS = {
-    "ADMINISTRADOR", "VENDEDOR", "MECANICO_MASTER", "MECANICO_JUNIOR",
+    "VENDEDOR", "MECANICO_MASTER", "MECANICO_JUNIOR",
     "CLIENTE_CONDUCTOR", "CLIENTE_DISTRITO", "CLIENTE_RURAL",
     "CLIENTE_FLOTA_DUENO", "CLIENTE_FLOTA_CONDUCTOR", "CLIENTE_MOTOLINEAL",
 }
+_ROLES_MASTER = {"SUPERADMIN", "ADMINISTRADOR"}
 
 
 @router.post(
@@ -306,7 +311,8 @@ async def crear_usuario(
 ) -> dict[str, Any]:
     """
     SUPERADMIN · ADMINISTRADOR — crea usuario.
-    No puede crear SUPERADMIN (03 §6.6).
+    No puede crear SUPERADMIN ni ADMINISTRADOR — roles master, solo vía
+    seed/bootstrap (ADR-016).
     """
     if body.rol not in _ROLES_VALIDOS:
         raise HTTPException(
@@ -355,6 +361,194 @@ async def crear_usuario(
             "variante_tema": user.variante_tema,
         },
         status_code=201,
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-ADM-14 — Editar usuario ───────────────────────────────────────────────
+
+class ActualizarUsuarioRequest(BaseModel):
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    email: Optional[str] = Field(default=None, min_length=5, max_length=200)
+    rol: Optional[str] = None
+
+
+@router.patch(
+    "/usuarios/{usuario_id}",
+    summary="EP-ADM-14: Editar usuario",
+    tags=["usuarios"],
+)
+async def editar_usuario(
+    request: Request,
+    usuario_id: str,
+    body: ActualizarUsuarioRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    """SUPERADMIN · ADMINISTRADOR — edita nombre/email/rol de un usuario no-master
+    (ADR-016). Nunca aplica a SUPERADMIN/ADMINISTRADOR, ni permite reasignar
+    hacia esos roles — solo existen vía seed/bootstrap."""
+    user_store = _get_user_store(request)
+    objetivo = await user_store.obtener_por_id(usuario_id)
+    if objetivo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "RECURSO_NO_ENCONTRADO", f"Usuario {usuario_id!r} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    if objetivo.rol in _ROLES_MASTER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(
+                "ACCESO_DENEGADO", "No está permitido editar un usuario con rol master",
+                request_id=get_request_id(request),
+            ),
+        )
+    if body.rol is not None and body.rol not in _ROLES_VALIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "VALIDACION_FALLIDA",
+                f"Rol {body.rol!r} inválido o no autorizado en este endpoint",
+                request_id=get_request_id(request),
+            ),
+        )
+    try:
+        actualizado = await user_store.actualizar_usuario(
+            usuario_id, nombre=body.nombre, email=body.email, rol=body.rol,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(
+        {
+            "usuario_id": actualizado.usuario_id,
+            "email": actualizado.email,
+            "nombre": actualizado.nombre,
+            "rol": actualizado.rol,
+        },
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-ADM-15 — Suspender / reactivar usuario ────────────────────────────────
+
+class ActualizarEstadoUsuarioRequest(BaseModel):
+    activo: bool
+
+
+@router.patch(
+    "/usuarios/{usuario_id}/estado",
+    summary="EP-ADM-15: Suspender o reactivar usuario",
+    tags=["usuarios"],
+)
+async def actualizar_estado_usuario(
+    request: Request,
+    usuario_id: str,
+    body: ActualizarEstadoUsuarioRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    """SUPERADMIN · ADMINISTRADOR — alterna `activo` (ADR-016). Reversible:
+    un usuario suspendido no puede hacer login/MFA/refresh (ya aplicado en
+    auth_routes.py) hasta que se reactive. Nunca aplica a roles master."""
+    user_store = _get_user_store(request)
+    objetivo = await user_store.obtener_por_id(usuario_id)
+    if objetivo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "RECURSO_NO_ENCONTRADO", f"Usuario {usuario_id!r} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    if objetivo.rol in _ROLES_MASTER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(
+                "ACCESO_DENEGADO", "No está permitido suspender un usuario con rol master",
+                request_id=get_request_id(request),
+            ),
+        )
+    actualizado = await user_store.actualizar_estado_activo(usuario_id, body.activo)
+    return success_response(
+        {"usuario_id": actualizado.usuario_id, "activo": actualizado.activo},
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-ADM-16 — Eliminar usuario (físico) ────────────────────────────────────
+
+@router.delete(
+    "/usuarios/{usuario_id}",
+    summary="EP-ADM-16: Eliminar usuario (físico)",
+    tags=["usuarios"],
+)
+async def eliminar_usuario(
+    request: Request,
+    usuario_id: str,
+    motivo: Optional[str] = Query(default=None, max_length=500),
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    """SUPERADMIN · ADMINISTRADOR — elimina físicamente un usuario (ADR-016).
+    Bloqueado con 403 si es rol master. Bloqueado con 409 si tiene historial
+    real de negocio (pedidos/OTs/reservas/etc.) — queda suspendido
+    permanentemente en ese caso. Registra snapshot de auditoría en
+    `usuario_eliminado` antes del DELETE físico (R29)."""
+    user_store = _get_user_store(request)
+    objetivo = await user_store.obtener_por_id(usuario_id)
+    if objetivo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "RECURSO_NO_ENCONTRADO", f"Usuario {usuario_id!r} no encontrado",
+                request_id=get_request_id(request),
+            ),
+        )
+    if objetivo.rol in _ROLES_MASTER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(
+                "ACCESO_DENEGADO", "No está permitido eliminar un usuario con rol master",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    pedido_repo = _get_pedido_repo(request)
+    taller_repo = _get_taller_repo(request)
+
+    cliente_id = await pedido_repo.obtener_cliente_id_por_usuario(usuario_id)
+    if cliente_id is not None:
+        if await pedido_repo.tiene_actividad_cliente(cliente_id) or await taller_repo.tiene_actividad_cliente(cliente_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_response(
+                    "USUARIO_CON_HISTORIAL",
+                    "El usuario tiene historial real de negocio (pedidos/OTs/reservas) — "
+                    "no se puede eliminar físicamente. Queda suspendido en su lugar.",
+                    request_id=get_request_id(request),
+                ),
+            )
+
+    mecanico_id = await taller_repo.obtener_mecanico_id_por_usuario(usuario_id)
+    if mecanico_id is not None:
+        if await taller_repo.tiene_actividad_mecanico(mecanico_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_response(
+                    "USUARIO_CON_HISTORIAL",
+                    "El usuario (mecánico) tiene historial real de negocio (OTs/rendiciones) — "
+                    "no se puede eliminar físicamente. Queda suspendido en su lugar.",
+                    request_id=get_request_id(request),
+                ),
+            )
+
+    await user_store.registrar_eliminacion(objetivo, eliminado_por=_auth.get("sub", ""), motivo=motivo)
+    await user_store.eliminar_usuario(usuario_id)
+    return success_response(
+        {"usuario_id": usuario_id, "eliminado": True},
         request_id=get_request_id(request),
     )
 
@@ -504,6 +698,7 @@ async def listar_usuarios(
                     "rol": u.rol,
                     "estado_cuenta": u.estado_cuenta,
                     "variante_tema": u.variante_tema,
+                    "activo": u.activo,
                 }
                 for u in todos
             ],

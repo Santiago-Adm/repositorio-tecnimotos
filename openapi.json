@@ -415,7 +415,7 @@
           "admin",
           "mecanicos"
         ],
-        "summary": "EP-ADM-12: Listar mecánicos disponibles",
+        "summary": "EP-ADM-13: Listar mecánicos disponibles",
         "description": "SUPERADMIN · ADMINISTRADOR — lista mecánicos disponibles con su nombre\nreal (join con usuario), usada por el filtro 'mecánico asignado' del panel BI (ADR-015).",
         "operationId": "listar_mecanicos_v1_admin_mecanicos_get",
         "responses": {
@@ -484,7 +484,7 @@
           "usuarios"
         ],
         "summary": "EP-ADM-05: Crear usuario",
-        "description": "SUPERADMIN · ADMINISTRADOR — crea usuario.\nNo puede crear SUPERADMIN (03 §6.6).",
+        "description": "SUPERADMIN · ADMINISTRADOR — crea usuario.\nNo puede crear SUPERADMIN ni ADMINISTRADOR — roles master, solo vía\nseed/bootstrap (ADR-016).",
         "operationId": "crear_usuario_v1_admin_usuarios_post",
         "requestBody": {
           "required": true,
@@ -576,6 +576,179 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Listar Usuarios V1 Admin Usuarios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios/{usuario_id}": {
+      "patch": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-14: Editar usuario",
+        "description": "SUPERADMIN · ADMINISTRADOR — edita nombre/email/rol de un usuario no-master\n(ADR-016). Nunca aplica a SUPERADMIN/ADMINISTRADOR, ni permite reasignar\nhacia esos roles — solo existen vía seed/bootstrap.",
+        "operationId": "editar_usuario_v1_admin_usuarios__usuario_id__patch",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarUsuarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Editar Usuario V1 Admin Usuarios  Usuario Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-16: Eliminar usuario (físico)",
+        "description": "SUPERADMIN · ADMINISTRADOR — elimina físicamente un usuario (ADR-016).\nBloqueado con 403 si es rol master. Bloqueado con 409 si tiene historial\nreal de negocio (pedidos/OTs/reservas/etc.) — queda suspendido\npermanentemente en ese caso. Registra snapshot de auditoría en\n`usuario_eliminado` antes del DELETE físico (R29).",
+        "operationId": "eliminar_usuario_v1_admin_usuarios__usuario_id__delete",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usuario Id"
+            }
+          },
+          {
+            "name": "motivo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Motivo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Eliminar Usuario V1 Admin Usuarios  Usuario Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/usuarios/{usuario_id}/estado": {
+      "patch": {
+        "tags": [
+          "admin",
+          "usuarios"
+        ],
+        "summary": "EP-ADM-15: Suspender o reactivar usuario",
+        "description": "SUPERADMIN · ADMINISTRADOR — alterna `activo` (ADR-016). Reversible:\nun usuario suspendido no puede hacer login/MFA/refresh (ya aplicado en\nauth_routes.py) hasta que se reactive. Nunca aplica a roles master.",
+        "operationId": "actualizar_estado_usuario_v1_admin_usuarios__usuario_id__estado_patch",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarEstadoUsuarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Estado Usuario V1 Admin Usuarios  Usuario Id  Estado Patch"
                 }
               }
             }
@@ -4240,6 +4413,19 @@
         ],
         "title": "ActualizarEstadoRequest"
       },
+      "ActualizarEstadoUsuarioRequest": {
+        "properties": {
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activo"
+        ],
+        "title": "ActualizarEstadoUsuarioRequest"
+      },
       "ActualizarParametroRequest": {
         "properties": {
           "valor": {
@@ -4286,6 +4472,49 @@
           "variante_tema"
         ],
         "title": "ActualizarTemaRequest"
+      },
+      "ActualizarUsuarioRequest": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "rol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rol"
+          }
+        },
+        "type": "object",
+        "title": "ActualizarUsuarioRequest"
       },
       "AgregarRepuestoRequest": {
         "properties": {

@@ -8,6 +8,7 @@ import { ApiCallError, Rol } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
 import BiPanel from '@/src/components/dashboard/BiPanel'
+import UsuariosManager from '@/src/components/dashboard/UsuariosManager'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
@@ -135,13 +136,8 @@ export default function SuperadminDashboard() {
   const [loadingMetrics, setLoadingMetrics] = useState(true)
   const [errorMetrics, setErrorMetrics] = useState<string | null>(null)
 
-  // Estados - Usuarios Generales
-  const [usuarios, setUsuarios] = useState<UserRecord[]>([])
-  const [loadingUsuarios, setLoadingUsuarios] = useState(false)
-  const [errorUsuarios, setErrorUsuarios] = useState<string | null>(null)
-  const [rolFilter, setRolFilter] = useState<string>('ALL')
-  const [estadoFilter, setEstadoFilter] = useState<string>('ALL')
-  const [searchQuery, setSearchQuery] = useState('')
+  // Nota: el estado de "Usuarios Generales" (listado/filtros/búsqueda) ahora
+  // vive en UsuariosManager.tsx (componente compartido, ADR-016).
 
   // Estados - Cuentas Pendientes
   const [pendientes, setPendientes] = useState<UserRecord[]>([])
@@ -205,27 +201,6 @@ export default function SuperadminDashboard() {
       setErrorMetrics((err as ApiCallError).code)
     } finally {
       setLoadingMetrics(false)
-    }
-  }
-
-  // Carga de Usuarios
-  async function fetchUsuarios() {
-    setLoadingUsuarios(true)
-    setErrorUsuarios(null)
-    try {
-      let url = '/v1/admin/usuarios'
-      const queryParams = []
-      if (rolFilter !== 'ALL') queryParams.push(`rol=${rolFilter}`)
-      if (estadoFilter !== 'ALL') queryParams.push(`estado=${estadoFilter}`)
-      if (queryParams.length > 0) {
-        url += '?' + queryParams.join('&')
-      }
-      const data = await apiClient.get<{ total: number; usuarios: UserRecord[] }>(url)
-      setUsuarios(data.usuarios ?? [])
-    } catch (err) {
-      setErrorUsuarios((err as ApiCallError).code)
-    } finally {
-      setLoadingUsuarios(false)
     }
   }
 
@@ -304,7 +279,6 @@ export default function SuperadminDashboard() {
   // Efecto desencadenado al cambiar de Sección
   useEffect(() => {
     if (seccion === 'Admin') {
-      if (adminTab === 'usuarios') fetchUsuarios()
       if (adminTab === 'pendientes') fetchPendientes()
       if (adminTab === 'parametros') fetchParametros()
     } else if (seccion === 'Catálogo') {
@@ -317,7 +291,7 @@ export default function SuperadminDashboard() {
       fetchMetrics()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seccion, adminTab, rolFilter, estadoFilter])
+  }, [seccion, adminTab])
 
   // Polling de Stock — refresco silencioso cada 30s mientras la sección está activa
   useEffect(() => {
@@ -386,12 +360,6 @@ export default function SuperadminDashboard() {
   }
 
   if (!user) return null
-
-  // Filtro cliente de usuarios por búsqueda de texto
-  const usuariosFiltrados = usuarios.filter(u => {
-    const q = searchQuery.toLowerCase()
-    return u.nombre.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.usuario_id.toLowerCase().includes(q)
-  })
 
   return (
     <div className="min-h-screen bg-surface-dark text-slate-100 font-sans">
@@ -618,7 +586,6 @@ export default function SuperadminDashboard() {
                 </div>
                 <button
                   onClick={() => {
-                    if (adminTab === 'usuarios') fetchUsuarios()
                     if (adminTab === 'pendientes') fetchPendientes()
                     if (adminTab === 'parametros') fetchParametros()
                   }}
@@ -628,101 +595,8 @@ export default function SuperadminDashboard() {
                 </button>
               </div>
 
-              {/* A: Tab Usuarios Generales (EP-ADM-09) */}
-              {adminTab === 'usuarios' && (
-                <div className="space-y-4">
-                  {/* Controles de Búsqueda y Filtro */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-900/30 p-3 rounded-lg border border-slate-800">
-                    <div>
-                      <label className="text-xs text-slate-500 font-body block mb-1">Buscar por nombre o correo</label>
-                      <input
-                        type="search"
-                        placeholder="Buscar..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-200 text-xs font-body focus:outline-none focus:ring-1 focus:ring-teal"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 font-body block mb-1">Filtrar por Rol</label>
-                      <select
-                        value={rolFilter}
-                        onChange={e => setRolFilter(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-200 text-xs font-body focus:outline-none focus:ring-1 focus:ring-teal"
-                      >
-                        <option value="ALL">Todos los roles</option>
-                        {Object.entries(ROL_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 font-body block mb-1">Filtrar por Estado de Cuenta</label>
-                      <select
-                        value={estadoFilter}
-                        onChange={e => setEstadoFilter(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-200 text-xs font-body focus:outline-none focus:ring-1 focus:ring-teal"
-                      >
-                        <option value="ALL">Todos los estados</option>
-                        {Object.entries(ESTADO_CUENTA_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {loadingUsuarios ? (
-                    <LoadingIndicator message="Cargando usuarios..." />
-                  ) : errorUsuarios ? (
-                    <ErrorDisplay code={errorUsuarios} onRetry={fetchUsuarios} />
-                  ) : usuariosFiltrados.length === 0 ? (
-                    <EmptyState
-                      title="Sin usuarios coincidentes"
-                      description="No hay registros que coincidan con los filtros aplicados."
-                    />
-                  ) : (
-                    <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-850">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead className="bg-slate-800 text-slate-400 font-body border-b border-slate-800">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold">Usuario ID</th>
-                            <th className="px-4 py-3 font-semibold">Nombre</th>
-                            <th className="px-4 py-3 font-semibold">Email</th>
-                            <th className="px-4 py-3 font-semibold">Rol</th>
-                            <th className="px-4 py-3 font-semibold">Estado</th>
-                            <th className="px-4 py-3 font-semibold">Variante Tema</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                          {usuariosFiltrados.map(u => (
-                            <tr key={u.usuario_id} className="hover:bg-slate-800/40">
-                              <td className="px-4 py-2.5 font-mono text-slate-300 truncate max-w-[140px]">{u.usuario_id}</td>
-                              <td className="px-4 py-2.5 text-slate-200 font-semibold">{u.nombre}</td>
-                              <td className="px-4 py-2.5 text-slate-400">{u.email}</td>
-                              <td className="px-4 py-2.5 text-slate-300 font-body">
-                                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px]">
-                                  {ROL_LABELS[u.rol] || u.rol}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-body ${
-                                  u.estado_cuenta === 'ACTIVO' ? 'bg-teal/20 text-teal' :
-                                  u.estado_cuenta === 'PENDIENTE_DOCUMENTOS' ? 'bg-amber-500/20 text-amber-400' :
-                                  u.estado_cuenta === 'EN_REVISION' ? 'bg-electric/20 text-electric' :
-                                  'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {ESTADO_CUENTA_LABELS[u.estado_cuenta] || u.estado_cuenta}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2.5 font-mono text-[10px] text-slate-500">{u.variante_tema || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* A: Tab Usuarios Generales (EP-ADM-09 + EP-ADM-14/15/16, ADR-016) */}
+              {adminTab === 'usuarios' && <UsuariosManager />}
 
               {/* B: Tab Cuentas Pendientes (EP-ADM-06, 07, 08) */}
               {adminTab === 'pendientes' && (

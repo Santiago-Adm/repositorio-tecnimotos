@@ -159,6 +159,7 @@ class InMemoryUserStore:
         self._by_email: dict[str, str] = {}  # email → usuario_id
         self._mfa_fallos_usuario: dict[str, int] = {}  # usuario_id → fallos consecutivos
         self._mfa_bloqueo: dict[str, datetime] = {}    # usuario_id → bloqueado_hasta
+        self._eliminados: list[dict] = []  # auditoría R29 — ver registrar_eliminacion (ADR-016)
         # Usuarios de desarrollo pre-cargados — uno por rol interno y por segmento
         # de cliente activo en el MVP (01 §Roles del sistema / §Segmentos activos).
         # SUPERADMIN queda deliberadamente excluido: se crea una sola vez vía
@@ -305,6 +306,54 @@ class InMemoryUserStore:
         if user:
             user.variante_tema = variante
         return user
+
+    # ── Gestión real de usuarios (editar/suspender/eliminar) — ADR-016 ──────────
+
+    async def actualizar_usuario(
+        self, usuario_id: str, nombre: Optional[str] = None,
+        email: Optional[str] = None, rol: Optional[str] = None,
+    ) -> Optional[UsuarioRecord]:
+        user = self._by_id.get(usuario_id)
+        if not user:
+            return None
+        if email is not None and email.lower() != user.email.lower():
+            if email.lower() in self._by_email:
+                raise ValueError(f"Email {email!r} ya registrado")
+            del self._by_email[user.email.lower()]
+            self._by_email[email.lower()] = usuario_id
+            user.email = email
+        if nombre is not None:
+            user.nombre = nombre
+        if rol is not None:
+            user.rol = rol
+        return user
+
+    async def actualizar_estado_activo(self, usuario_id: str, activo: bool) -> Optional[UsuarioRecord]:
+        user = self._by_id.get(usuario_id)
+        if user:
+            user.activo = activo
+        return user
+
+    async def registrar_eliminacion(
+        self, usuario: UsuarioRecord, eliminado_por: str, motivo: Optional[str] = None,
+    ) -> None:
+        """Snapshot de auditoría (R29) — se registra ANTES del DELETE físico (ADR-016)."""
+        self._eliminados.append({
+            "usuario_id_original": usuario.usuario_id,
+            "email": usuario.email,
+            "nombre": usuario.nombre,
+            "rol": usuario.rol,
+            "eliminado_por": eliminado_por,
+            "motivo": motivo,
+            "eliminado_en": datetime.now(timezone.utc),
+        })
+
+    async def eliminar_usuario(self, usuario_id: str) -> bool:
+        user = self._by_id.pop(usuario_id, None)
+        if user is None:
+            return False
+        self._by_email.pop(user.email.lower(), None)
+        return True
 
     # ── Bloqueo temporal MFA cross-sesión (ADR-011 + ADR-014) ──
     # Antes vivía en InMemorySessionStore — movido aquí para tener el mismo

@@ -28,10 +28,12 @@ from src.taller.domain.models.orden_trabajo import (
 )
 from src.taller.infrastructure.repositories.models.taller_models import (
     EntradaModel,
+    HistorialCobroMecanicoModel,
     HistorialIntervencionModel,
     ListaRepuestosOTModel,
     MecanicoModel,
     OrdenTrabajoModel,
+    RendicionMecanicoModel,
     VehiculoModel,
 )
 
@@ -243,6 +245,52 @@ class TallerRepositoryPG:
         ))
         await self._session.flush()
         return h
+
+    # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
+
+    async def obtener_mecanico_id_por_usuario(self, usuario_id: str) -> Optional[str]:
+        stmt = select(MecanicoModel.id).where(MecanicoModel.usuario_id == usuario_id)
+        result = await self._session.execute(stmt)
+        row = result.first()
+        return row[0] if row else None
+
+    async def tiene_actividad_cliente(self, cliente_id: str) -> bool:
+        """True si el cliente tiene vehículo/OT/entrada real — bloquea el DELETE
+        físico de usuario (ADR-016)."""
+        for model, campo in (
+            (VehiculoModel, VehiculoModel.cliente_id),
+            (OrdenTrabajoModel, OrdenTrabajoModel.cliente_id),
+            (EntradaModel, EntradaModel.cliente_id),
+        ):
+            stmt = select(model.id).where(campo == cliente_id).limit(1)
+            result = await self._session.execute(stmt)
+            if result.first() is not None:
+                return True
+        return False
+
+    async def tiene_actividad_mecanico(self, mecanico_id: str) -> bool:
+        """True si el mecánico tiene OT/rendición/historial de cobro real, o es
+        supervisor de otro mecánico — bloquea el DELETE físico (ADR-016)."""
+        stmt = select(OrdenTrabajoModel.id).where(
+            (OrdenTrabajoModel.mecanico_master_id == mecanico_id)
+            | (OrdenTrabajoModel.mecanico_junior_id == mecanico_id)
+        ).limit(1)
+        if (await self._session.execute(stmt)).first() is not None:
+            return True
+        stmt = select(MecanicoModel.id).where(MecanicoModel.supervisor_id == mecanico_id).limit(1)
+        if (await self._session.execute(stmt)).first() is not None:
+            return True
+        stmt = select(RendicionMecanicoModel.id).where(
+            RendicionMecanicoModel.mecanico_id == mecanico_id
+        ).limit(1)
+        if (await self._session.execute(stmt)).first() is not None:
+            return True
+        stmt = select(HistorialCobroMecanicoModel.id).where(
+            HistorialCobroMecanicoModel.mecanico_master_id == mecanico_id
+        ).limit(1)
+        if (await self._session.execute(stmt)).first() is not None:
+            return True
+        return False
 
     # ── Helpers privados ──────────────────────────────────────────────────────
 

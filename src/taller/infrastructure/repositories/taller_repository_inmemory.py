@@ -85,6 +85,35 @@ class InMemoryTallerRepository:
         self._historial[h.id] = h
         return h
 
+    # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
+
+    async def obtener_mecanico_id_por_usuario(self, usuario_id: str) -> Optional[str]:
+        m = next((m for m in self._mecanicos.values() if m.usuario_id == usuario_id), None)
+        return m.id if m else None
+
+    async def tiene_actividad_cliente(self, cliente_id: str) -> bool:
+        """True si el cliente tiene vehículo/OT/entrada real — bloquea el DELETE
+        físico de usuario (ADR-016)."""
+        if any(v.cliente_id == cliente_id for v in self._vehiculos.values()):
+            return True
+        if any(ot.cliente_id == cliente_id for ot in self._ots.values()):
+            return True
+        if any(e.cliente_id == cliente_id for e in self._entradas.values()):
+            return True
+        return False
+
+    async def tiene_actividad_mecanico(self, mecanico_id: str) -> bool:
+        """True si el mecánico tiene OT asignada o es supervisor de otro
+        mecánico — bloquea el DELETE físico de usuario (ADR-016)."""
+        if any(
+            ot.mecanico_master_id == mecanico_id or ot.mecanico_junior_id == mecanico_id
+            for ot in self._ots.values()
+        ):
+            return True
+        if any(m.supervisor_id == mecanico_id for m in self._mecanicos.values()):
+            return True
+        return False
+
     def limpiar(self) -> None:
         self._ots.clear()
         self._vehiculos.clear()

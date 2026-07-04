@@ -24,6 +24,7 @@ from api.auth_stores import (
     _verify_password,
 )
 from src.shared.infrastructure.models.usuario_model import DocumentoUsuarioModel, UsuarioModel
+from src.shared.infrastructure.models.usuario_eliminado_model import UsuarioEliminadoModel
 
 
 class UsuarioRepositoryPG:
@@ -165,6 +166,57 @@ class UsuarioRepositoryPG:
             model.variante_tema = variante
             await self._session.flush()
         return await self._to_record(model) if model else None
+
+    # ── Gestión real de usuarios (editar/suspender/eliminar) — ADR-016 ──────────
+
+    async def actualizar_usuario(
+        self, usuario_id: str, nombre: Optional[str] = None,
+        email: Optional[str] = None, rol: Optional[str] = None,
+    ) -> Optional[UsuarioRecord]:
+        model = await self._session.get(UsuarioModel, usuario_id)
+        if not model:
+            return None
+        if email is not None and email.lower() != model.email:
+            existente = await self.buscar_por_email(email)
+            if existente is not None:
+                raise ValueError(f"Email {email!r} ya registrado")
+            model.email = email.lower()
+        if nombre is not None:
+            model.nombre = nombre
+        if rol is not None:
+            model.rol = rol
+        await self._session.flush()
+        return await self._to_record(model)
+
+    async def actualizar_estado_activo(self, usuario_id: str, activo: bool) -> Optional[UsuarioRecord]:
+        model = await self._session.get(UsuarioModel, usuario_id)
+        if model:
+            model.activo = activo
+            await self._session.flush()
+        return await self._to_record(model) if model else None
+
+    async def registrar_eliminacion(
+        self, usuario: UsuarioRecord, eliminado_por: str, motivo: Optional[str] = None,
+    ) -> None:
+        """Snapshot de auditoría (R29) — se inserta ANTES del DELETE físico,
+        en la misma transacción (ADR-016)."""
+        self._session.add(UsuarioEliminadoModel(
+            usuario_id_original=usuario.usuario_id,
+            email=usuario.email,
+            nombre=usuario.nombre,
+            rol=usuario.rol,
+            eliminado_por=eliminado_por,
+            motivo=motivo,
+        ))
+        await self._session.flush()
+
+    async def eliminar_usuario(self, usuario_id: str) -> bool:
+        model = await self._session.get(UsuarioModel, usuario_id)
+        if not model:
+            return False
+        await self._session.delete(model)
+        await self._session.flush()
+        return True
 
     # ── Bloqueo temporal MFA cross-sesión (ADR-011 + ADR-014) ──
     # Antes vivía en InMemorySessionStore._mfa_fallos_usuario/_mfa_bloqueo (memoria,
