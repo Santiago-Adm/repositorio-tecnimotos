@@ -4,6 +4,7 @@
 .env.*.local
 *.pem
 *.key
+.claude
 
 # Python
 __pycache__/
@@ -34,12 +35,13 @@ coverage.xml
 dist/
 .pytest_cache/
 .coverage
-VERIFICACION_MANUAL.md
-levantar-sistema.md
+
 
 # Documentación privada / personal
 .doc3/
 .dco3/
+VERIFICACION_MANUAL.md
+levantar-sistema.md
 
 dependency-check-report/
 semgrep-report.json
