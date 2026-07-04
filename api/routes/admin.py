@@ -29,6 +29,10 @@ _ROLES_NO_SUPERADMIN = (
 
 
 def _get_parametros(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.parametros_repository_pg import ParametrosRepositoryPG
+        return ParametrosRepositoryPG(db)
     return request.app.state.parametros_service
 
 
@@ -56,6 +60,14 @@ def _get_pedido_repo(request: Request):
     return request.app.state.pedidos_repo
 
 
+def _get_catalogo_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.catalogo.infrastructure.repositories.repuesto_repository_pg import RepuestoRepositoryPG
+        return RepuestoRepositoryPG(db)
+    return request.app.state.catalogo_repo
+
+
 def _get_stock_repo(request: Request):
     db = getattr(request.state, "db", None)
     if db is not None:
@@ -76,11 +88,11 @@ async def listar_parametros(
 ) -> dict[str, Any]:
     """SUPERADMIN · ADMINISTRADOR — lista todos los parámetros configurables."""
     svc = _get_parametros(request)
-    # InMemoryParametrosService expone _parametros directamente
-    parametros = []
-    for k, v in getattr(svc, "_parametros", {}).items():
-        modificable_por = "SUPERADMIN" if k == "ttl_cache_parametros_segundos" else "ADMINISTRADOR"
-        parametros.append({"clave": k, "valor": v, "modificable_por": modificable_por})
+    resultados = await svc.listar()
+    parametros = [
+        {"clave": r.clave, "valor": r.valor, "modificable_por": r.modificable_por}
+        for r in resultados
+    ]
     return success_response(
         {"parametros": parametros, "total": len(parametros)},
         request_id=get_request_id(request),
@@ -110,7 +122,7 @@ async def actualizar_parametro(
     from src.shared.domain.parametros_port import ParametroNoEncontradoError
     svc = _get_parametros(request)
     try:
-        await svc.obtener_parametro(clave)  # verifica que existe
+        actual = await svc.obtener_parametro(clave)  # verifica que existe + trae modificable_por real
     except ParametroNoEncontradoError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -121,8 +133,7 @@ async def actualizar_parametro(
         )
 
     # ABAC-07: solo si modificable_por == ADMINISTRADOR o es SUPERADMIN
-    modificable_por = "SUPERADMIN" if clave == "ttl_cache_parametros_segundos" else "ADMINISTRADOR"
-    if modificable_por == "SUPERADMIN" and _auth.get("rol") != "SUPERADMIN":
+    if actual.modificable_por == "SUPERADMIN" and _auth.get("rol") != "SUPERADMIN":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=error_response(
@@ -131,7 +142,7 @@ async def actualizar_parametro(
             ),
         )
 
-    svc.establecer(clave, body.valor)
+    await svc.establecer(clave, body.valor)
     return success_response(
         {"clave": clave, "valor": body.valor, "cache_invalidado": True},
         request_id=get_request_id(request),
@@ -222,6 +233,38 @@ async def crear_mecanico(
             "disponible": mecanico.disponible,
         },
         status_code=201,
+        request_id=get_request_id(request),
+    )
+
+
+# ── EP-ADM-12 — Listar mecánicos disponibles ─────────────────────────────────
+
+@router.get(
+    "/mecanicos",
+    summary="EP-ADM-12: Listar mecánicos disponibles",
+    tags=["mecanicos"],
+)
+async def listar_mecanicos(
+    request: Request,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    """SUPERADMIN · ADMINISTRADOR — lista mecánicos disponibles con su nombre
+    real (join con usuario), usada por el filtro 'mecánico asignado' del panel BI (ADR-015)."""
+    taller_repo = _get_taller_repo(request)
+    user_store = _get_user_store(request)
+    mecanicos = await taller_repo.listar_mecanicos_disponibles()
+    resultado = []
+    for m in mecanicos:
+        usuario = await user_store.obtener_por_id(m.usuario_id)
+        resultado.append({
+            "mecanico_id": m.id,
+            "usuario_id": m.usuario_id,
+            "nombre": usuario.nombre if usuario else m.usuario_id,
+            "nivel": m.nivel.value,
+            "disponible": m.disponible,
+        })
+    return success_response(
+        {"mecanicos": resultado, "total": len(resultado)},
         request_id=get_request_id(request),
     )
 
@@ -477,41 +520,96 @@ async def listar_usuarios(
 )
 async def metricas_negocio(
     request: Request,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    categoria: Optional[str] = None,
+    universo: Optional[str] = None,
+    mecanico_id: Optional[str] = None,
     _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
 ) -> dict[str, Any]:
     """
     SUPERADMIN · ADMINISTRADOR — agrega métricas operativas del negocio.
 
-    Período de comprobantes: mes calendario actual (día 1 del mes a hoy).
-    Elección documentada: el flujo de comprobantes es mensual (ciclo de
-    facturación) y coincide con el período que el equipo administrativo
-    revisa en reuniones mensuales de cierre.
+    ADR-015: "OT activa" ya no es una regla fija — se lee de
+    `taller.ot_activa.estados`/`taller.ot_activa.dias_maximo` en
+    parametros_sistema, editable desde GET/PATCH /v1/admin/parametros.
+
+    Período de ingresos: `desde`/`hasta` (ISO date, ej. 2026-07-01) — rango
+    libre, cálculo on-demand, sin agregación fija (ADR-015). Sin params,
+    mantiene el comportamiento anterior (mes calendario actual) — retro-
+    compatible con cualquier consumidor existente.
+
+    Filtros avanzados (Pieza 1, panel BI): `categoria`/`universo` acotan
+    `repuestos_bajo_umbral` a los repuestos reales que cumplen ambos;
+    `mecanico_id` acota `ots_activas` a las OTs de ese mecánico
+    (master o junior). Todos opcionales — sin ellos, comportamiento agregado
+    de siempre.
     """
+    from src.taller.domain.services.ot_activa_service import es_ot_activa, obtener_config_ot_activa
+    from src.catalogo.domain.models.repuesto import UniversoRepuesto
+
     taller_repo = _get_taller_repo(request)
     pedido_repo = _get_pedido_repo(request)
     stock_repo = _get_stock_repo(request)
+    parametros_svc = _get_parametros(request)
 
-    _ESTADOS_OT_ACTIVAS = {"ABIERTA", "LISTA_REPUESTOS", "EN_EJECUCION", "REVISION_FINAL"}
     _ESTADOS_PEDIDO_ACTIVOS = {"BORRADOR", "CONFIRMADO", "EN_PREPARACION"}
 
     ots = await taller_repo.listar_ots()
     pedidos = await pedido_repo.listar_todos()
     stocks = await stock_repo.listar_todos()
     comprobantes = await pedido_repo.listar_comprobantes()
+    config_ot_activa = await obtener_config_ot_activa(parametros_svc)
 
     ahora = datetime.now(timezone.utc)
-    inicio_mes = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if desde:
+        rango_desde = datetime.fromisoformat(desde).replace(tzinfo=timezone.utc)
+    else:
+        rango_desde = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if hasta:
+        rango_hasta = datetime.fromisoformat(hasta).replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+    else:
+        rango_hasta = ahora
     hoy_fecha = ahora.date()
 
-    ots_activas = sum(1 for ot in ots if ot.estado.value in _ESTADOS_OT_ACTIVAS)
+    ots_filtradas = ots
+    if mecanico_id:
+        ots_filtradas = [
+            ot for ot in ots_filtradas
+            if ot.mecanico_master_id == mecanico_id or ot.mecanico_junior_id == mecanico_id
+        ]
+    ots_activas = sum(1 for ot in ots_filtradas if es_ot_activa(ot, config_ot_activa, ahora))
+
     pedidos_dia = sum(
         1 for p in pedidos
         if p.estado.value in _ESTADOS_PEDIDO_ACTIVOS and p.created_at.date() == hoy_fecha
     )
-    repuestos_bajo_umbral = sum(1 for s in stocks if s.esta_bajo_umbral())
-    suma_comprobantes_mes = sum(
+
+    stocks_filtrados = stocks
+    if categoria or universo:
+        catalogo_repo = _get_catalogo_repo(request)
+        universos = [UniversoRepuesto(universo)] if universo else list(UniversoRepuesto)
+        repuestos_por_codigo = {}
+        for u in universos:
+            for r in await catalogo_repo.buscar(universo=u):
+                repuestos_por_codigo[r.codigo] = r
+
+        def _coincide(s) -> bool:
+            r = repuestos_por_codigo.get(s.codigo)
+            if r is None:
+                return False
+            if categoria and r.categoria != categoria.strip().lower():
+                return False
+            return True
+
+        stocks_filtrados = [s for s in stocks_filtrados if _coincide(s)]
+
+    repuestos_bajo_umbral = sum(1 for s in stocks_filtrados if s.esta_bajo_umbral())
+    suma_comprobantes_periodo = sum(
         c.monto for c in comprobantes
-        if c.estado.value == "EMITIDO" and c.created_at >= inicio_mes
+        if c.estado.value == "EMITIDO" and rango_desde <= c.created_at <= rango_hasta
     )
 
     return success_response(
@@ -519,10 +617,10 @@ async def metricas_negocio(
             "ots_activas": ots_activas,
             "pedidos_activos_hoy": pedidos_dia,
             "repuestos_bajo_umbral": repuestos_bajo_umbral,
-            "comprobantes_emitidos_mes_actual": float(suma_comprobantes_mes),
+            "comprobantes_emitidos_periodo": float(suma_comprobantes_periodo),
             "periodo_comprobantes": {
-                "desde": inicio_mes.date().isoformat(),
-                "hasta": hoy_fecha.isoformat(),
+                "desde": rango_desde.date().isoformat(),
+                "hasta": rango_hasta.date().isoformat(),
             },
         },
         request_id=get_request_id(request),

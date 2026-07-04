@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.pedidos.domain.models.pedido import EstadoPedido, Pedido, PedidoItem
+from src.pedidos.domain.models.pedido import Comprobante, EstadoPedido, Pedido, PedidoItem, TipoComprobante
 from src.pedidos.infrastructure.repositories.pedido_repository_pg import PedidoRepositoryPG
 from tests.integration.conftest_pg import pg_session
 
@@ -42,6 +42,22 @@ class TestPedidoRepositoryPG:
         obtenido = await repo.obtener_por_id(pedido.id)
         assert obtenido is not None
         assert obtenido.cliente_id is None
+
+    async def test_guardar_y_listar_comprobantes(self, repo, pg_session):
+        """listar_comprobantes() contra PG real — EP-ADM-10 depende de este método
+        (bug real detectado: PedidoRepositoryPG no lo implementaba, solo InMemory)."""
+        pedido = Pedido(canal_origen="presencial", origen_actor="VENDEDOR")
+        await repo.guardar(pedido)
+
+        comp = Comprobante(
+            pedido_id=pedido.id, monto=Decimal("120.50"),
+            tipo=TipoComprobante.BOLETA, emitido_por="user-test",
+        )
+        comp.aprobar()
+        await repo.guardar_comprobante(comp)
+
+        comprobantes = await repo.listar_comprobantes()
+        assert any(c.id == comp.id and c.monto == Decimal("120.50") for c in comprobantes)
 
     async def test_actualizar_estado(self, repo, pg_session):
         pedido = Pedido(canal_origen="presencial", origen_actor="VENDEDOR")

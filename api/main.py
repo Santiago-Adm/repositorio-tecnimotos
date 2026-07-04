@@ -118,6 +118,11 @@ async def _lifespan(app: FastAPI):
             await seed_usuarios_dev_pg(app.state.db_session_factory)
         except Exception as exc:
             logger.warning("seed_usuarios_dev: no se pudo sembrar usuarios PG de desarrollo (%s)", exc)
+        try:
+            from src.shared.infrastructure.seed_parametros import seed_parametros_pg
+            await seed_parametros_pg(app.state.db_session_factory)
+        except Exception as exc:
+            logger.warning("seed_parametros: no se pudo sembrar parametros_sistema (%s)", exc)
     except Exception as exc:
         app.state.db_session_factory = None
         app.state._pg_engine = None

@@ -7,6 +7,7 @@ import { apiClient } from '@/src/lib/api-client'
 import { ApiCallError } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
+import BiPanel from '@/src/components/dashboard/BiPanel'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
@@ -27,12 +28,12 @@ interface StockResponse {
   total: number
 }
 
-type Seccion = 'Stock' | 'Catálogo' | 'Categorías' | 'Pedidos' | 'Taller' | 'Admin'
+type Seccion = 'Panel BI' | 'Stock' | 'Catálogo' | 'Categorías' | 'Pedidos' | 'Taller' | 'Admin'
 
 export default function AdministradorDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
-  const [seccion, setSeccion] = useState<Seccion>('Stock')
+  const [seccion, setSeccion] = useState<Seccion>('Panel BI')
   const [stock, setStock] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +66,7 @@ export default function AdministradorDashboard() {
       <div className="flex">
         {/* Navegación — 02 §4.1 ADMINISTRADOR */}
         <nav className="hidden md:flex flex-col w-48 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1">
-          {(['Stock', 'Catálogo', 'Categorías', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
+          {(['Panel BI', 'Stock', 'Catálogo', 'Categorías', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
             <button
               key={m}
               onClick={() => setSeccion(m)}
@@ -79,13 +80,15 @@ export default function AdministradorDashboard() {
         </nav>
 
         <main className="flex-1 p-6 space-y-6">
-          {seccion !== 'Stock' && seccion !== 'Categorías' && (
+          {seccion !== 'Stock' && seccion !== 'Categorías' && seccion !== 'Panel BI' && (
             <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
               <p className="text-slate-400 font-body text-sm">
                 Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
               </p>
             </section>
           )}
+
+          {seccion === 'Panel BI' && <BiPanel />}
 
           {seccion === 'Categorías' && <CategoriasManager />}
 

@@ -81,6 +81,14 @@ def _get_catalogo(request: Request):
     return request.app.state.catalogo_taller_adapter
 
 
+def _get_parametros(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.parametros_repository_pg import ParametrosRepositoryPG
+        return ParametrosRepositoryPG(db)
+    return request.app.state.parametros_service
+
+
 def _ot_to_dict(ot) -> dict:
     return {
         "ot_id": ot.id,
@@ -532,6 +540,46 @@ async def registrar_prueba_ruta(
             **_ot_to_dict(ot),
             "vehiculo_salud_estimada": vehiculo.salud_estimada,
         },
+        request_id=get_request_id(request),
+    )
+
+
+@router.get(
+    "/ordenes-trabajo",
+    summary="EP-TAL-14: Listar órdenes de trabajo (ADR-015)",
+)
+async def listar_ots(
+    request: Request,
+    estado: Optional[str] = None,
+    mecanico_id: Optional[str] = None,
+    activa: Optional[bool] = None,
+    _auth: dict = Depends(require_roles(*INTERNO_ROLES)),
+) -> dict[str, Any]:
+    """
+    Listado real de OTs — antes solo existía GET .../{ot_id} (una por una),
+    hueco confirmado en sesión anterior y en FASE 0 de ADR-015.
+    `activa` se calcula con la regla configurable de ADR-015 (estado +
+    días abierta), no una regla fija — ver GET/PATCH /v1/admin/parametros.
+    """
+    from src.taller.domain.services.ot_activa_service import es_ot_activa, obtener_config_ot_activa
+
+    repo = _get_repo(request)
+    ots = await repo.listar_ots()
+
+    if estado is not None:
+        ots = [ot for ot in ots if ot.estado.value == estado.upper()]
+    if mecanico_id is not None:
+        ots = [
+            ot for ot in ots
+            if ot.mecanico_master_id == mecanico_id or ot.mecanico_junior_id == mecanico_id
+        ]
+    if activa is not None:
+        parametros_svc = _get_parametros(request)
+        config = await obtener_config_ot_activa(parametros_svc)
+        ots = [ot for ot in ots if es_ot_activa(ot, config) == activa]
+
+    return success_response(
+        {"ordenes_trabajo": [_ot_to_dict(ot) for ot in ots], "total": len(ots)},
         request_id=get_request_id(request),
     )
 

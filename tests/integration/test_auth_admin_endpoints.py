@@ -309,6 +309,45 @@ async def test_adm04_crea_mecanico_junior_con_supervisor(app_client):
 
 
 @pytest.mark.asyncio
+async def test_adm12_lista_mecanicos_disponibles_con_nombre(app_client):
+    """EP-ADM-12: GET /v1/admin/mecanicos hace join real con usuario.nombre."""
+    r = await app_client.post("/v1/admin/mecanicos", json={
+        "usuario_id": "user-admin-seed", "nivel": "MASTER",
+    })
+    assert r.status_code == 201
+
+    r = await app_client.get("/v1/admin/mecanicos")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["total"] >= 1
+    encontrado = next(m for m in data["mecanicos"] if m["usuario_id"] == "user-admin-seed")
+    assert encontrado["nombre"] != "user-admin-seed"  # el seed sí existe → nombre real, no fallback
+    assert encontrado["nivel"] == "MASTER"
+    assert encontrado["disponible"] is True
+
+
+@pytest.mark.asyncio
+async def test_adm12_usuario_inexistente_hace_fallback_a_usuario_id(app_client):
+    """EP-ADM-12: si el usuario_id no existe en el store, el nombre cae a usuario_id."""
+    r = await app_client.post("/v1/admin/mecanicos", json={
+        "usuario_id": "user-fantasma-999", "nivel": "JUNIOR",
+    })
+    assert r.status_code == 201
+
+    r = await app_client.get("/v1/admin/mecanicos")
+    encontrado = next(m for m in r.json()["data"]["mecanicos"] if m["usuario_id"] == "user-fantasma-999")
+    assert encontrado["nombre"] == "user-fantasma-999"
+
+
+@pytest.mark.asyncio
+async def test_adm12_rbac_vendedor_bloqueado(app_client):
+    """EP-ADM-12: VENDEDOR no puede listar mecánicos."""
+    token = make_test_token(app_client._test_private_pem, "VENDEDOR")
+    r = await app_client.get("/v1/admin/mecanicos", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_adm04_vendedor_no_autorizado(app_client):
     """EP-ADM-04: VENDEDOR → 403 (solo SUPERADMIN · ADMINISTRADOR)."""
     token = make_test_token(app_client._test_private_pem, "VENDEDOR")

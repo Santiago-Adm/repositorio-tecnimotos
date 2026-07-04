@@ -7,12 +7,13 @@ import { apiClient } from '@/src/lib/api-client'
 import { ApiCallError, Rol } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
+import BiPanel from '@/src/components/dashboard/BiPanel'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
 
-type Seccion = 'Catálogo' | 'Categorías' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'
+type Seccion = 'Panel BI' | 'Catálogo' | 'Categorías' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'
 
 // Mapeos visuales para roles
 const ROL_LABELS: Record<string, string> = {
@@ -66,7 +67,7 @@ interface BizMetrics {
   ots_activas: number
   pedidos_activos_hoy: number
   repuestos_bajo_umbral: number
-  comprobantes_emitidos_mes_actual: number
+  comprobantes_emitidos_periodo: number
   periodo_comprobantes: {
     desde: string
     hasta: string
@@ -94,7 +95,7 @@ export default function SuperadminDashboard() {
   const router = useRouter()
 
   // Navegación
-  const [seccion, setSeccion] = useState<Seccion>('Logs y config')
+  const [seccion, setSeccion] = useState<Seccion>('Panel BI')
   const [adminTab, setAdminTab] = useState<'usuarios' | 'pendientes' | 'parametros'>('usuarios')
 
   // Sincronizar sección con URL query params para navegación y persistencia (evita pérdida de estado en refresco)
@@ -103,7 +104,7 @@ export default function SuperadminDashboard() {
       const params = new URLSearchParams(window.location.search)
       const secParam = params.get('seccion')
       const validSections: Array<Seccion> = [
-        'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
+        'Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
       ]
       if (secParam === 'Logs') {
         setSeccion('Logs y config')
@@ -434,9 +435,9 @@ export default function SuperadminDashboard() {
             onChange={e => handleSetSeccion(e.target.value as any)}
             className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold font-body focus:outline-none focus:ring-2 focus:ring-teal"
           >
-            {(['Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
+            {(['Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
               <option key={m} value={m}>
-                {m === 'Logs y config' ? 'Logs y config (Inicio)' : m}
+                {m}
               </option>
             ))}
           </select>
@@ -444,7 +445,7 @@ export default function SuperadminDashboard() {
 
         {/* SIDEBAR NAVIGATION */}
         <nav className="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1.5 bg-slate-900/40">
-          {(['Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
+          {(['Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
             <button
               key={m}
               onClick={() => handleSetSeccion(m)}
@@ -461,6 +462,9 @@ export default function SuperadminDashboard() {
 
         {/* CONTENEDOR PRINCIPAL */}
         <main className="flex-1 p-6 space-y-6 max-w-7xl">
+
+          {/* 0. SECCIÓN: PANEL BI (ADR-015 — filtros premium, mismo nivel que ADMINISTRADOR) */}
+          {seccion === 'Panel BI' && <BiPanel />}
 
           {/* 1. SECCIÓN: LOGS Y CONFIG (Métricas y Estado) */}
           {seccion === 'Logs y config' && (
@@ -490,7 +494,7 @@ export default function SuperadminDashboard() {
                         <div className="rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/80 p-5 shadow-lg relative overflow-hidden group">
                           <p className="text-xs text-slate-400 font-body uppercase tracking-wider mb-1.5">Facturación Emitida (SUNAT)</p>
                           <p className="text-3xl lg:text-4xl font-mono text-teal font-extrabold tracking-tight">
-                            S/ {bizMetrics.comprobantes_emitidos_mes_actual.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            S/ {bizMetrics.comprobantes_emitidos_periodo.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                           </p>
                           <div className="absolute bottom-0 right-0 w-24 h-24 bg-teal/5 rounded-full blur-2xl group-hover:bg-teal/10 transition-colors"></div>
                         </div>

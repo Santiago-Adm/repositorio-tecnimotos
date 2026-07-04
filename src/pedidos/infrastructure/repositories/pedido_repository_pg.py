@@ -261,6 +261,24 @@ class PedidoRepositoryPG:
         await self._session.flush()
         return comp
 
+    async def listar_comprobantes(self) -> list[Comprobante]:
+        stmt = select(ComprobanteModel)
+        result = await self._session.execute(stmt)
+        return [
+            Comprobante(
+                id=model.id,
+                pedido_id=model.pedido_id,
+                tipo=TipoComprobante(model.tipo),
+                monto=Decimal(str(model.monto)),
+                emitido_por=model.emitido_por,
+                estado=EstadoComprobante(model.estado),
+                ruc_cliente=model.ruc_cliente,
+                nota_credito_id=model.nota_credito_id,
+                created_at=_dt(model.created_at),
+            )
+            for model in result.scalars().all()
+        ]
+
     # ── Deudas ────────────────────────────────────────────────────────────────
 
     async def guardar_deuda(self, deuda: DeudaActiva) -> DeudaActiva:

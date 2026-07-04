@@ -86,7 +86,7 @@ async def test_adm10_respuesta_200_con_estructura(app_client):
     assert "ots_activas" in data
     assert "pedidos_activos_hoy" in data
     assert "repuestos_bajo_umbral" in data
-    assert "comprobantes_emitidos_mes_actual" in data
+    assert "comprobantes_emitidos_periodo" in data
     assert "periodo_comprobantes" in data
     assert isinstance(data["ots_activas"], int)
     assert isinstance(data["pedidos_activos_hoy"], int)
@@ -149,7 +149,7 @@ async def test_adm10_comprobantes_mes_actual_suma_correcta(app_client):
 
     r = await app_client.get("/v1/admin/metricas-negocio")
     assert r.status_code == 200
-    assert r.json()["data"]["comprobantes_emitidos_mes_actual"] == 150.0
+    assert r.json()["data"]["comprobantes_emitidos_periodo"] == 150.0
 
 
 @pytest.mark.asyncio

@@ -410,6 +410,29 @@
       }
     },
     "/v1/admin/mecanicos": {
+      "get": {
+        "tags": [
+          "admin",
+          "mecanicos"
+        ],
+        "summary": "EP-ADM-12: Listar mecánicos disponibles",
+        "description": "SUPERADMIN · ADMINISTRADOR — lista mecánicos disponibles con su nombre\nreal (join con usuario), usada por el filtro 'mecánico asignado' del panel BI (ADR-015).",
+        "operationId": "listar_mecanicos_v1_admin_mecanicos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Mecanicos V1 Admin Mecanicos Get"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "admin",
@@ -703,17 +726,109 @@
           "admin"
         ],
         "summary": "EP-ADM-10: Métricas de negocio agregadas",
-        "description": "SUPERADMIN · ADMINISTRADOR — agrega métricas operativas del negocio.\n\nPeríodo de comprobantes: mes calendario actual (día 1 del mes a hoy).\nElección documentada: el flujo de comprobantes es mensual (ciclo de\nfacturación) y coincide con el período que el equipo administrativo\nrevisa en reuniones mensuales de cierre.",
+        "description": "SUPERADMIN · ADMINISTRADOR — agrega métricas operativas del negocio.\n\nADR-015: \"OT activa\" ya no es una regla fija — se lee de\n`taller.ot_activa.estados`/`taller.ot_activa.dias_maximo` en\nparametros_sistema, editable desde GET/PATCH /v1/admin/parametros.\n\nPeríodo de ingresos: `desde`/`hasta` (ISO date, ej. 2026-07-01) — rango\nlibre, cálculo on-demand, sin agregación fija (ADR-015). Sin params,\nmantiene el comportamiento anterior (mes calendario actual) — retro-\ncompatible con cualquier consumidor existente.\n\nFiltros avanzados (Pieza 1, panel BI): `categoria`/`universo` acotan\n`repuestos_bajo_umbral` a los repuestos reales que cumplen ambos;\n`mecanico_id` acota `ots_activas` a las OTs de ese mecánico\n(master o junior). Todos opcionales — sin ellos, comportamiento agregado\nde siempre.",
         "operationId": "metricas_negocio_v1_admin_metricas_negocio_get",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          },
+          {
+            "name": "universo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Universo"
+            }
+          },
+          {
+            "name": "mecanico_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mecanico Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Metricas Negocio V1 Admin Metricas Negocio Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -3039,14 +3154,14 @@
         "summary": "EP-TAL-01: Abrir orden de trabajo",
         "operationId": "abrir_ot_v1_ordenes_trabajo_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AbrirOTRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -3054,9 +3169,91 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Abrir Ot V1 Ordenes Trabajo Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-14: Listar órdenes de trabajo (ADR-015)",
+        "description": "Listado real de OTs — antes solo existía GET .../{ot_id} (una por una),\nhueco confirmado en sesión anterior y en FASE 0 de ADR-015.\n`activa` se calcula con la regla configurable de ADR-015 (estado +\ndías abierta), no una regla fija — ver GET/PATCH /v1/admin/parametros.",
+        "operationId": "listar_ots_v1_ordenes_trabajo_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "mecanico_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mecanico Id"
+            }
+          },
+          {
+            "name": "activa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activa"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Ots V1 Ordenes Trabajo Get"
                 }
               }
             }
