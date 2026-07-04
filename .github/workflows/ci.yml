@@ -126,3 +126,19 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Incidente 2026-07-04: levantar-sistema.md siguió trackeado en HEAD
+      # meses después de agregarse a .gitignore (agregar la regla no aplica
+      # retroactivamente — requiere `git rm --cached`). gitleaks no detecta
+      # este tipo de incidente porque el contenido no son secretos de alta
+      # entropía. Este check cierra ese gap específico.
+      - name: Verificar que ningún archivo trackeado coincide con .gitignore
+        run: |
+          COINCIDENCIAS=$(git ls-files -i --exclude-standard -c)
+          if [ -n "$COINCIDENCIAS" ]; then
+            echo "ERROR: los siguientes archivos están trackeados pese a estar en .gitignore:"
+            echo "$COINCIDENCIAS"
+            echo "Ejecuta: git rm --cached <archivo> y commitea el cambio."
+            exit 1
+          fi
+          echo "OK — ningún archivo trackeado coincide con .gitignore."

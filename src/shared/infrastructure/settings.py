@@ -18,8 +18,11 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000)
 
-    database_url: str = Field(default="postgresql+asyncpg://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos")
-    database_url_sync: str = Field(default="postgresql://tecnimotos:tecnimotos_dev@localhost:5432/tecnimotos")
+    # Sin default (R23/incidente de seguridad 2026-07-04): la app debe fallar
+    # al arrancar si no están configuradas, no degradar silenciosamente a una
+    # credencial de desarrollo conocida y pública.
+    database_url: str
+    database_url_sync: str
 
     redis_url: str = Field(default="redis://localhost:6379/0")
     redis_params_db: str = Field(default="redis://localhost:6379/1")
