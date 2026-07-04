@@ -32,6 +32,15 @@ export function decodeJwtPayload(token: string): { sub: string; rol: string; exp
 }
 
 async function parseEnvelope<T>(res: Response): Promise<T> {
+  // 204 No Content (ej. DELETE /v1/categorias/{id}) — sin body, res.json() lanzaría
+  // SyntaxError si se intentara parsear (PIEZA C, sesión 2026-07-03).
+  if (res.status === 204) {
+    if (!res.ok) {
+      throw new ApiCallError('ERROR_INTERNO', res.statusText)
+    }
+    return undefined as T
+  }
+
   const body = await res.json()
 
   if (!res.ok) {

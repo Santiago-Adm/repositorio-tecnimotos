@@ -4,6 +4,7 @@ Debe pasar la misma suite de contrato LSP que RepuestoRepositoryPG.
 """
 from __future__ import annotations
 
+import random
 from typing import Optional
 
 from src.catalogo.domain.models.repuesto import (
@@ -41,6 +42,8 @@ class InMemoryRepuestoRepository:
         año: Optional[int] = None,
         solo_disponibles: bool = True,
         destacado: Optional[bool] = None,
+        random_order: bool = False,
+        limit: Optional[int] = None,
     ) -> list[Repuesto]:
         results = []
         for r in self._store.values():
@@ -55,7 +58,15 @@ class InMemoryRepuestoRepository:
             if destacado is not None and r.destacado != destacado:
                 continue
             results.append(r)
+        if random_order:
+            random.shuffle(results)
+        if limit is not None:
+            results = results[:limit]
         return results
+
+    async def listar_modelos_distintos(self, universo: UniversoRepuesto) -> list[str]:
+        modelos = {r.modelo for r in self._store.values() if r.universo == universo and r.activo}
+        return sorted(modelos)
 
     async def buscar_por_lista_codigos(
         self,

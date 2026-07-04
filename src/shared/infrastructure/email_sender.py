@@ -29,10 +29,27 @@ async def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str) -> No
     destinatario_parcial = destinatario[:3] + "***"
 
     if not settings.resend_api_key:
-        logger.warning(
-            "email_sender: RESEND_API_KEY no configurada — correo no enviado (dev/test)",
-            extra={"destinatario_parcial": destinatario_parcial, "asunto": asunto},
-        )
+        # PIEZA D (sesión 2026-07-03): visibilidad del código MFA en desarrollo.
+        # Condición estricta == "development" (no "not production") — si
+        # ENVIRONMENT tiene cualquier otro valor (incluido vacío, mal escrito,
+        # o "production"), esta rama NUNCA loguea el código. Fail-safe: el
+        # valor por defecto de settings.environment es "development" (ver
+        # settings.py), así que un ENVIRONMENT ausente en un despliegue real
+        # sigue siendo un error de configuración a corregir — no una vía para
+        # exponer códigos por accidente, porque Railway/producción real deben
+        # declarar ENVIRONMENT=production explícitamente en sus variables.
+        if settings.environment == "development":
+            logger.warning(
+                "email_sender: SOLO DESARROLLO — NUNCA EN PRODUCCIÓN — "
+                "RESEND_API_KEY no configurada, código MFA visible solo aquí: %s",
+                cuerpo_texto,
+                extra={"destinatario_parcial": destinatario_parcial, "asunto": asunto},
+            )
+        else:
+            logger.warning(
+                "email_sender: RESEND_API_KEY no configurada — correo no enviado",
+                extra={"destinatario_parcial": destinatario_parcial, "asunto": asunto},
+            )
         return
 
     async with httpx.AsyncClient(timeout=10.0) as client:

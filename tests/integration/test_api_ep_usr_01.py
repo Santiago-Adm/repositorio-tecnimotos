@@ -16,6 +16,9 @@ Escenarios cubiertos:
 """
 from __future__ import annotations
 
+import re
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
 
@@ -256,17 +259,24 @@ async def test_variante_tema_en_response_mfa_login_completo(app_client):
     """
     Flujo real de login (EP-AUTH-01 → EP-AUTH-02):
     variante_tema debe estar presente en el response de MFA, no solo en el modelo.
+    ADMINISTRADOR requiere código MFA real por correo (ADR-011) — "123456" nunca
+    funciona para este rol. Se intercepta el código real igual que
+    tests/integration/test_mfa_correo.py::_login_capturando_codigo.
     """
-    r1 = await app_client.post(
-        "/v1/auth/login",
-        json={"email": "admin@tecnimotos.test", "password": "admin123"},
-    )
+    with patch("api.routes.auth_routes.enviar_correo", new=AsyncMock()) as mock_enviar:
+        r1 = await app_client.post(
+            "/v1/auth/login",
+            json={"email": "admin@tecnimotos.test", "password": "admin123"},
+        )
     assert r1.status_code == 200, r1.text
     mfa_token = r1.json()["data"]["mfa_session_token"]
 
+    cuerpo = mock_enviar.await_args.args[2]
+    codigo_real = re.search(r"\b(\d{6})\b", cuerpo).group(1)
+
     r2 = await app_client.post(
         "/v1/auth/mfa",
-        json={"mfa_session_token": mfa_token, "totp_code": "123456"},
+        json={"mfa_session_token": mfa_token, "totp_code": codigo_real},
     )
     assert r2.status_code == 200, r2.text
     data = r2.json()["data"]

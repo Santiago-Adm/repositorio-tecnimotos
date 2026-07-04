@@ -72,7 +72,7 @@ class Repuesto:
     universo: UniversoRepuesto
     modelo: str
     año: Optional[int]
-    categoria: CategoriaRepuesto
+    categoria: str  # nombre de categoria (tabla dinámica, no enum — sesión 2026-07-03)
     precio_venta: Decimal
     descripcion: str = ""
     activo: bool = True
@@ -112,7 +112,7 @@ class Repuesto:
         self,
         nombre: Optional[str] = None,
         descripcion: Optional[str] = None,
-        categoria: Optional["CategoriaRepuesto"] = None,
+        categoria: Optional[str] = None,
         modelo: Optional[str] = None,
         año: Optional[int] = None,
     ) -> None:

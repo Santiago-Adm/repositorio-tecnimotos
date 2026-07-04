@@ -9,7 +9,6 @@ from decimal import Decimal
 from typing import Any
 
 from src.catalogo.domain.models.repuesto import (
-    CategoriaRepuesto,
     Repuesto,
     UniversoRepuesto,
 )
@@ -27,7 +26,7 @@ class CrearRepuestoCommand:
     universo: UniversoRepuesto
     modelo: str
     año: int
-    categoria: CategoriaRepuesto
+    categoria: str
     precio_venta: Decimal
     descripcion: str = ""
     creado_por: str = ""
@@ -70,7 +69,7 @@ class CrearRepuestoUseCase:
                 "universo": repuesto.universo.value,
                 "modelo": repuesto.modelo,
                 "año": repuesto.año,
-                "categoria": repuesto.categoria.value,
+                "categoria": repuesto.categoria,
             },
         )
         await self._event_publisher.publish(envelope)

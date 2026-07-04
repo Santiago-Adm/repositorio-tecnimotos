@@ -44,9 +44,25 @@ async def test_error_http_lanza_email_send_error(monkeypatch):
             await enviar_correo("admin@tecnimotos.test", "Tu código", "Tu código es 111111")
 
 
-async def test_nunca_loguea_el_cuerpo_del_correo(monkeypatch, caplog):
+async def test_produccion_nunca_loguea_el_codigo_aunque_falte_api_key(monkeypatch, caplog):
+    """Fail-safe: ENVIRONMENT != 'development' nunca expone el código, ni
+    siquiera si alguien desconfigura RESEND_API_KEY por error (PIEZA D)."""
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
     codigo_secreto = "999999"
     with patch("httpx.AsyncClient.post", new=AsyncMock()):
         await enviar_correo("admin@tecnimotos.test", "Tu código", f"Tu código es {codigo_secreto}")
     assert codigo_secreto not in caplog.text
+
+
+async def test_desarrollo_sin_api_key_loguea_codigo_marcado(monkeypatch, caplog):
+    """PIEZA D (sesión 2026-07-03): en development, sin RESEND_API_KEY, el
+    código real aparece en el log — marcado explícitamente como solo-desarrollo."""
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    codigo_secreto = "888888"
+    with patch("httpx.AsyncClient.post", new=AsyncMock()):
+        await enviar_correo("admin@tecnimotos.test", "Tu código", f"Tu código es {codigo_secreto}")
+    assert codigo_secreto in caplog.text
+    assert "SOLO DESARROLLO" in caplog.text
+    assert "NUNCA EN PRODUCCIÓN" in caplog.text

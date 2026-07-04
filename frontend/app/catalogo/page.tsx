@@ -12,15 +12,11 @@ import { ApiCallError, RepuestoDetalle, RepuestoListItem } from '@/src/lib/types
 
 type Repuesto = RepuestoListItem
 
-const CATEGORIAS = [
-  { value: '', label: 'Todos' },
-  { value: 'motor', label: 'Motor' },
-  { value: 'transmision', label: 'Transmisión' },
-  { value: 'frenos', label: 'Frenos' },
-  { value: 'electrico', label: 'Eléctrico' },
-  { value: 'carroceria', label: 'Carrocería' },
-  { value: 'suspension', label: 'Suspensión' },
-]
+interface Categoria {
+  id: string
+  nombre: string
+  orden: number
+}
 
 const PAGE_SIZE = 12
 
@@ -28,8 +24,24 @@ type Universo = 'mototaxi_3r' | 'mototaxi_4r' | 'motolineal'
 
 const UNIVERSOS_VALIDOS: Universo[] = ['mototaxi_3r', 'mototaxi_4r', 'motolineal']
 
+// Jerarquía real confirmada por Sant/Elena (PIEZA B, sesión 2026-07-03):
+// 2R=motolineal, 3R=mototaxi_3r, 4R=mototaxi_4r.
+const UNIVERSO_LABEL: Record<Universo, string> = {
+  mototaxi_3r: '3R',
+  mototaxi_4r: '4R',
+  motolineal: '2R',
+}
+
 function esUniversoValido(v: string | null): v is Universo {
   return !!v && (UNIVERSOS_VALIDOS as string[]).includes(v)
+}
+
+// Códigos reales de la migración Bajaj: sin espacios, 7-18 caracteres
+// alfanuméricos (confirmado: 16 192/16 195 sin guion). Un nombre de
+// búsqueda ("filtro de aceite") sí tiene espacios — ver page.tsx (landing).
+function esPosibleCodigo(termino: string): boolean {
+  const t = termino.trim()
+  return t.length >= 6 && !t.includes(' ')
 }
 
 function CatalogoContent() {
@@ -54,6 +66,24 @@ function CatalogoContent() {
 
   const [resultadoCodigo, setResultadoCodigo] = useState<RepuestoDetalle | null | 'no_encontrado'>(null)
   const [buscandoCodigo, setBuscandoCodigo] = useState(false)
+
+  // Categorías dinámicas (EP-CAT-13) — nunca hardcodeadas. Si Elena agrega/quita
+  // una categoría desde el dashboard de ADMIN, este catálogo se actualiza solo.
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  useEffect(() => {
+    apiClient.get<{ categorias: Categoria[] }>('/v1/categorias')
+      .then(data => setCategorias(data.categorias))
+      .catch(() => setCategorias([]))
+  }, [])
+
+  // Modelos reales por universo (EP-CAT-17) — 107 valores confirmados en FASE 0.3,
+  // pocos y reutilizables → autocomplete real, no texto libre disperso.
+  const [modelosDisponibles, setModelosDisponibles] = useState<string[]>([])
+  useEffect(() => {
+    apiClient.get<{ modelos: string[] }>(`/v1/repuestos/modelos?universo=${universo}`)
+      .then(data => setModelosDisponibles(data.modelos))
+      .catch(() => setModelosDisponibles([]))
+  }, [universo])
 
   // Debounce del filtro de modelo (texto libre → server-side, EP-CAT-01 param real)
   useEffect(() => {
@@ -105,12 +135,20 @@ function CatalogoContent() {
   // EP-CAT-01 no tiene parámetro de texto libre, así que el catálogo pagina
   // server-side (universo/categoria/modelo) y la búsqueda exacta por código
   // resuelve aparte contra GET /v1/repuestos/{codigo}.
+  // Heurística de detección corregida (sesión 2026-07-04): antes exigía un
+  // guion ("-"), asumiendo el formato mockeado "BAJ-4592". Confirmado real
+  // contra los 16 195 repuestos de la migración: solo 3 códigos tienen guion,
+  // el resto es alfanumérico plano de 7-18 caracteres sin espacios
+  // (ej. "39050302", "01100317"). "Sin espacios y largo >= 6" es el criterio
+  // real que distingue un código de una búsqueda por nombre.
+  const mostrandoResultadoCodigo = esPosibleCodigo(busqueda)
+
   useEffect(() => {
-    const term = busqueda.trim()
-    if (!term.includes('-')) {
+    if (!mostrandoResultadoCodigo) {
       setResultadoCodigo(null)
       return
     }
+    const term = busqueda.trim()
     let cancelado = false
     setBuscandoCodigo(true)
     apiClient
@@ -119,9 +157,7 @@ function CatalogoContent() {
       .catch(() => { if (!cancelado) setResultadoCodigo('no_encontrado') })
       .finally(() => { if (!cancelado) setBuscandoCodigo(false) })
     return () => { cancelado = true }
-  }, [busqueda])
-
-  const mostrandoResultadoCodigo = busqueda.trim().includes('-')
+  }, [busqueda, mostrandoResultadoCodigo])
   const paginaActual = Math.min(page, totalPaginas)
 
   return (
@@ -153,87 +189,102 @@ function CatalogoContent() {
             {total} repuestos físicos en Ayacucho
           </p>
 
-          {/* Caja de Búsqueda Integrada — código exacto (ej. BAJ-4592) */}
+          {/* Caja de Búsqueda Integrada — código exacto (ej. 39050302) */}
           <div className="mt-8 w-full max-w-md relative">
             <input
               type="text"
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
-              placeholder="Busca por código exacto (ej. BAJ-4592)..."
+              placeholder="Busca por código exacto (ej. 39050302)..."
               className="w-full px-5 py-3 rounded-full bg-slate-900/90 border border-slate-800/80 font-mono text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal/70 focus:border-transparent transition-all shadow-lg"
             />
           </div>
         </div>
       </section>
 
-      {/* B. PESTAÑAS CENTRALES Y FILTROS DE MARCA */}
+      {/* B. FILTROS POR JERARQUÍA VISUAL: universo → modelo → año → categoría
+          (PIEZA A, sesión 2026-07-03 — reordenamiento visual puro, misma lógica
+          de filtrado combinado de siempre; solo cambia orden y prominencia de render). */}
       <section className="w-full py-8 flex flex-col items-center justify-center space-y-6 bg-surface-dark/30 border-y border-slate-800/10">
-        {/* Selectores de Marca Destacados (Bajaj 3R/4R / TVS) */}
+        {/* Filtro 1: universo (2R=motolineal, 3R=mototaxi_3r, 4R=mototaxi_4r) — chips grandes, máxima prominencia */}
         <div className="flex items-center space-x-3 bg-[#0b0f19]/70 p-1.5 rounded-full border border-slate-800/80 backdrop-blur-md">
-          <button
-            onClick={() => setUniverso('mototaxi_3r')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
-              universo === 'mototaxi_3r'
-                ? 'bg-teal text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-            }`}
-          >
-            Bajaj 3R
-          </button>
-          <button
-            onClick={() => setUniverso('mototaxi_4r')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
-              universo === 'mototaxi_4r'
-                ? 'bg-teal text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-            }`}
-          >
-            Bajaj 4R
-          </button>
-          <button
-            onClick={() => setUniverso('motolineal')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
-              universo === 'motolineal'
-                ? 'bg-teal text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-            }`}
-          >
-            TVS
-          </button>
+          {UNIVERSOS_VALIDOS.map(u => (
+            <button
+              key={u}
+              onClick={() => setUniverso(u)}
+              className={`px-6 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
+                universo === u
+                  ? 'bg-teal text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+              }`}
+            >
+              {UNIVERSO_LABEL[u]}
+            </button>
+          ))}
         </div>
 
-        {/* Pestañas Centrales de Categorías */}
+        <div className="flex items-center gap-3 flex-wrap justify-center">
+          {/* Filtro 2: modelo — autocomplete real (107 valores confirmados, FASE 0.3),
+              poblado desde GET /v1/repuestos/modelos, no texto libre disperso. */}
+          <div className="flex items-center space-x-2 text-xs text-slate-400 bg-[#0b0f19]/50 px-3 py-1.5 rounded-lg border border-slate-800/70 backdrop-blur-md">
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Modelo:</span>
+            <input
+              type="text"
+              list="modelos-catalogo"
+              value={modeloInput}
+              onChange={e => setModeloInput(e.target.value)}
+              placeholder="Ej. Pulsar 200 NS"
+              className="bg-transparent border-none text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-0 font-medium text-xs w-44"
+            />
+            <datalist id="modelos-catalogo">
+              {modelosDisponibles.map(m => <option key={m} value={m} />)}
+            </datalist>
+          </div>
+
+          {/* Filtro 3: año — deshabilitado hasta que Elena cargue datos reales
+              (16 195/16 195 repuestos con año NULL hoy, confirmado FASE 0.3). */}
+          <div
+            title="Próximamente — falta que Elena cargue el año real de los repuestos"
+            className="flex items-center space-x-2 text-xs text-slate-600 bg-[#0b0f19]/30 px-3 py-1.5 rounded-lg border border-slate-800/40 cursor-not-allowed select-none"
+          >
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Año:</span>
+            <span className="italic">Próximamente</span>
+          </div>
+        </div>
+
+        {/* Filtro 4: categoría — chips dinámicos desde GET /v1/categorias, nunca
+            hardcodeados. Si Elena crea/borra una categoría, aparece/desaparece sola.
+            Secundario a propósito: debajo de modelo/año, escala menor, sin el
+            fondo/blur/sombra que sí tiene universo — jerarquía visual real (PIEZA A). */}
         <div className="w-full max-w-5xl px-4 overflow-visible flex items-center justify-center">
-          <div className="flex items-center space-x-3 overflow-x-auto max-w-full px-4 scrollbar-none py-1.5 bg-[#0b0f19]/60 backdrop-blur-md rounded-full border border-slate-800/80 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
-            {CATEGORIAS.map(cat => {
-              const active = cat.value === categoria
+          <div className="flex items-center space-x-2 overflow-x-auto max-w-full px-2 scrollbar-none py-1">
+            <button
+              onClick={() => setCategoria('')}
+              className={`relative px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all duration-300 shrink-0 ${
+                categoria === ''
+                  ? 'bg-teal/80 text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+              }`}
+            >
+              Todos
+            </button>
+            {categorias.map(cat => {
+              const active = cat.nombre === categoria
               return (
                 <button
-                  key={cat.value}
-                  onClick={() => setCategoria(cat.value)}
-                  className={`relative px-4 py-2 rounded-full text-xs font-semibold tracking-wider uppercase transition-all duration-300 shrink-0 ${
+                  key={cat.id}
+                  onClick={() => setCategoria(cat.nombre)}
+                  className={`relative px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all duration-300 shrink-0 ${
                     active
-                      ? 'bg-teal text-white shadow-md'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                      ? 'bg-teal/80 text-white'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
                   }`}
                 >
-                  {cat.label}
+                  {cat.nombre}
                 </button>
               )
             })}
           </div>
-        </div>
-
-        {/* Filtro de Modelo (texto libre — EP-CAT-01 param real, server-side) */}
-        <div className="flex items-center space-x-2 text-xs text-slate-400 bg-[#0b0f19]/50 px-3 py-1.5 rounded-lg border border-slate-800/70 backdrop-blur-md">
-          <span className="font-semibold uppercase tracking-wider text-[10px]">Modelo:</span>
-          <input
-            type="text"
-            value={modeloInput}
-            onChange={e => setModeloInput(e.target.value)}
-            placeholder="Ej. King Deluxe"
-            className="bg-transparent border-none text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-0 font-medium text-xs w-40"
-          />
         </div>
       </section>
 

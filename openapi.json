@@ -795,7 +795,7 @@
           "catalogo"
         ],
         "summary": "EP-CAT-01: Buscar repuestos",
-        "description": "Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).\ndestacado=true filtra la selección editorial manual usada en la landing pública.",
+        "description": "Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).\ndestacado=true filtra la selección editorial manual usada en la landing pública.\ncompletar_aleatorio=true (junto con destacado=true y limit): si hay menos\ndestacados que `limit`, completa con repuestos reales aleatorios (nunca\nvacío mientras haya catálogo — PIEZA A, sesión 2026-07-03). Opt-in: solo\npara vistas de escaparate público, nunca para listados administrativos.",
         "operationId": "buscar_repuestos_v1_repuestos_get",
         "parameters": [
           {
@@ -845,7 +845,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/CategoriaRepuesto"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -868,6 +868,16 @@
                 }
               ],
               "title": "Destacado"
+            }
+          },
+          {
+            "name": "completar_aleatorio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Completar Aleatorio"
             }
           },
           {
@@ -951,6 +961,50 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Crear Repuesto V1 Repuestos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repuestos/modelos": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-17: Listar modelos distintos por universo",
+        "description": "Público — sin auth. Puebla el autocomplete de modelo en el catálogo\n(107 valores reales confirmados en FASE 0.3, sesión 2026-07-03 — pocos y\nreutilizables, no texto libre disperso).",
+        "operationId": "listar_modelos_v1_repuestos_modelos_get",
+        "parameters": [
+          {
+            "name": "universo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UniversoRepuesto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Modelos V1 Repuestos Modelos Get"
                 }
               }
             }
@@ -1593,6 +1647,158 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/categorias": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-13: Listar categorías",
+        "description": "Público — sin auth. Pobla el filtro de categoría del catálogo.",
+        "operationId": "listar_categorias_v1_categorias_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Categorias V1 Categorias Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-14: Crear categoría",
+        "operationId": "crear_categoria_v1_categorias_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCategoriaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Crear Categoria V1 Categorias Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/categorias/{categoria_id}": {
+      "patch": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-15: Actualizar categoría",
+        "operationId": "actualizar_categoria_v1_categorias__categoria_id__patch",
+        "parameters": [
+          {
+            "name": "categoria_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Categoria Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarCategoriaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Actualizar Categoria V1 Categorias  Categoria Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "EP-CAT-16: Eliminar categoría",
+        "operationId": "eliminar_categoria_v1_categorias__categoria_id__delete",
+        "parameters": [
+          {
+            "name": "categoria_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Categoria Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -3686,6 +3892,36 @@
         ],
         "title": "ActivarPlanRequest"
       },
+      "ActualizarCategoriaRequest": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden"
+          }
+        },
+        "type": "object",
+        "title": "ActualizarCategoriaRequest"
+      },
       "ActualizarDatosRequest": {
         "properties": {
           "nombre": {
@@ -3716,12 +3952,15 @@
           "categoria": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CategoriaRepuesto"
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Categoria"
           },
           "modelo": {
             "anyOf": [
@@ -4078,21 +4317,6 @@
         ],
         "title": "CancelarPedidoRequest"
       },
-      "CategoriaRepuesto": {
-        "type": "string",
-        "enum": [
-          "motor",
-          "transmision",
-          "frenos",
-          "electrico",
-          "carroceria",
-          "suspension",
-          "tecnico_especializado",
-          "consumible",
-          "otro"
-        ],
-        "title": "CategoriaRepuesto"
-      },
       "CobroParcialRequest": {
         "properties": {
           "monto_pagado": {
@@ -4160,6 +4384,26 @@
           "codigos"
         ],
         "title": "ConsultarListaRequest"
+      },
+      "CrearCategoriaRequest": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "CrearCategoriaRequest"
       },
       "CrearListaReservaRequest": {
         "properties": {
@@ -4343,7 +4587,10 @@
             "title": "Año"
           },
           "categoria": {
-            "$ref": "#/components/schemas/CategoriaRepuesto"
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Categoria"
           },
           "precio_venta": {
             "anyOf": [

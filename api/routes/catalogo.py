@@ -17,7 +17,7 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 
 from api.auth import require_roles
@@ -72,8 +72,21 @@ from src.catalogo.application.use_cases.subir_imagen_repuesto import (
     SubirImagenRepuestoCommand,
     SubirImagenRepuestoUseCase,
 )
+from src.catalogo.application.use_cases.gestionar_categorias import (
+    ActualizarCategoriaCommand,
+    ActualizarCategoriaUseCase,
+    CrearCategoriaCommand,
+    CrearCategoriaUseCase,
+    EliminarCategoriaCommand,
+    EliminarCategoriaUseCase,
+    ListarCategoriasUseCase,
+)
+from src.catalogo.domain.models.categoria import (
+    CategoriaDuplicadaError,
+    CategoriaEnUsoError,
+    CategoriaNoEncontradaError,
+)
 from src.catalogo.domain.models.repuesto import (
-    CategoriaRepuesto,
     DomainError,
     RepuestoDadoDeBajaError,
     RepuestoNoEncontradoError,
@@ -150,7 +163,7 @@ class CrearRepuestoRequest(BaseModel):
     universo: UniversoRepuesto
     modelo: str = Field(min_length=1, max_length=100)
     año: int = Field(ge=1990, le=2100)
-    categoria: CategoriaRepuesto
+    categoria: str = Field(min_length=1, max_length=50)
     precio_venta: Decimal = Field(gt=0)
     descripcion: str = ""
 
@@ -167,7 +180,7 @@ class ActualizarDatosRequest(BaseModel):
     aquí (usa EP-CAT-04)."""
     nombre: Optional[str] = Field(default=None, min_length=1, max_length=200)
     descripcion: Optional[str] = Field(default=None, max_length=2000)
-    categoria: Optional[CategoriaRepuesto] = None
+    categoria: Optional[str] = Field(default=None, min_length=1, max_length=50)
     modelo: Optional[str] = Field(default=None, min_length=1, max_length=100)
     año: Optional[int] = Field(default=None, ge=1990, le=2100)
     destacado: Optional[bool] = None
@@ -213,6 +226,14 @@ def _get_imagen_storage(request: Request):
     return request.app.state.imagen_storage
 
 
+def _get_categoria_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.catalogo.infrastructure.repositories.categoria_repository_pg import CategoriaRepositoryPG
+        return CategoriaRepositoryPG(db)
+    return request.app.state.categoria_repo
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/repuestos", summary="EP-CAT-01: Buscar repuestos")
@@ -221,8 +242,9 @@ async def buscar_repuestos(
     universo: UniversoRepuesto,
     modelo: Optional[str] = None,
     año: Optional[int] = None,
-    categoria: Optional[CategoriaRepuesto] = None,
+    categoria: Optional[str] = None,
     destacado: Optional[bool] = None,
+    completar_aleatorio: bool = False,
     page: int = Query(1, ge=1),
     limit: Optional[int] = Query(None, ge=1, le=200),
 ) -> dict[str, Any]:
@@ -231,7 +253,11 @@ async def buscar_repuestos(
     page/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad
     con consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /
     sesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).
-    destacado=true filtra la selección editorial manual usada en la landing pública."""
+    destacado=true filtra la selección editorial manual usada en la landing pública.
+    completar_aleatorio=true (junto con destacado=true y limit): si hay menos
+    destacados que `limit`, completa con repuestos reales aleatorios (nunca
+    vacío mientras haya catálogo — PIEZA A, sesión 2026-07-03). Opt-in: solo
+    para vistas de escaparate público, nunca para listados administrativos."""
     repo = _get_repo(request)
     imagen_repo = _get_imagen_repo(request)
     use_case = BuscarRepuestosUseCase(repo)
@@ -240,8 +266,19 @@ async def buscar_repuestos(
         BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año, destacado=destacado)
     )
     repuestos_filtrados = result.repuestos
+
+    if completar_aleatorio and destacado and limit is not None and len(repuestos_filtrados) < limit:
+        faltan = limit - len(repuestos_filtrados)
+        ya_incluidos = {r.id for r in repuestos_filtrados}
+        relleno = await repo.buscar(
+            universo=universo, año=año, random_order=True, limit=faltan + len(ya_incluidos),
+        )
+        relleno = [r for r in relleno if r.id not in ya_incluidos][:faltan]
+        repuestos_filtrados = repuestos_filtrados + relleno
+
     if categoria is not None:
-        repuestos_filtrados = [r for r in repuestos_filtrados if r.categoria == categoria]
+        _cat_norm = categoria.strip().lower()
+        repuestos_filtrados = [r for r in repuestos_filtrados if r.categoria == _cat_norm]
     total_filtrado = len(repuestos_filtrados)
 
     total_paginas: Optional[int] = None
@@ -264,7 +301,7 @@ async def buscar_repuestos(
                 universo=r.universo.value,
                 modelo=r.modelo,
                 año=r.año,
-                categoria=r.categoria.value,
+                categoria=r.categoria,
                 activo=r.activo,
                 advertencia_instalacion=r.requiere_advertencia_instalacion(),
                 imagen_principal_url=principal,
@@ -279,6 +316,18 @@ async def buscar_repuestos(
         respuesta,
         request_id=get_request_id(request),
     )
+
+
+# Registrado antes de /repuestos/{codigo} — evita que FastAPI capture "modelos"
+# como codigo (mismo patrón ya usado para EP-CAT-12 vs EP-CAT-11, ver memoria).
+@router.get("/repuestos/modelos", summary="EP-CAT-17: Listar modelos distintos por universo")
+async def listar_modelos(request: Request, universo: UniversoRepuesto) -> dict[str, Any]:
+    """Público — sin auth. Puebla el autocomplete de modelo en el catálogo
+    (107 valores reales confirmados en FASE 0.3, sesión 2026-07-03 — pocos y
+    reutilizables, no texto libre disperso)."""
+    repo = _get_repo(request)
+    modelos = await repo.listar_modelos_distintos(universo)
+    return success_response({"modelos": modelos}, request_id=get_request_id(request))
 
 
 @router.get("/repuestos/{codigo}", summary="EP-CAT-02: Obtener repuesto por código")
@@ -309,7 +358,7 @@ async def obtener_repuesto(request: Request, codigo: str) -> dict[str, Any]:
         universo=repuesto.universo.value,
         modelo=repuesto.modelo,
         año=repuesto.año,
-        categoria=repuesto.categoria.value,
+        categoria=repuesto.categoria,
         activo=repuesto.activo,
         advertencia_instalacion=repuesto.requiere_advertencia_instalacion(),
         disponible=repuesto.activo and stock > 0,
@@ -376,6 +425,17 @@ async def crear_repuesto(
     _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
 ) -> dict[str, Any]:
     """Crea repuesto nuevo. Solo ADMINISTRADOR y SUPERADMIN."""
+    categoria_repo = _get_categoria_repo(request)
+    if await categoria_repo.obtener_por_nombre(body.categoria) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response(
+                "CATEGORIA_NO_ENCONTRADA",
+                f"Categoría {body.categoria!r} no existe — crear vía POST /v1/categorias primero",
+                request_id=get_request_id(request),
+            ),
+        )
+
     repo = _get_repo(request)
     event_publisher = _get_event_publisher(request)
     use_case = CrearRepuestoUseCase(repo, event_publisher)
@@ -388,7 +448,7 @@ async def crear_repuesto(
                 universo=body.universo,
                 modelo=body.modelo,
                 año=body.año,
-                categoria=body.categoria,
+                categoria=body.categoria.strip().lower(),
                 precio_venta=body.precio_venta,
                 descripcion=body.descripcion,
                 creado_por=getattr(request.state, "usuario_id", ""),
@@ -499,6 +559,18 @@ async def actualizar_datos_repuesto(
             ),
         )
 
+    if body.categoria is not None:
+        categoria_repo = _get_categoria_repo(request)
+        if await categoria_repo.obtener_por_nombre(body.categoria) is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=error_response(
+                    "CATEGORIA_NO_ENCONTRADA",
+                    f"Categoría {body.categoria!r} no existe — crear vía POST /v1/categorias primero",
+                    request_id=get_request_id(request),
+                ),
+            )
+
     repo = _get_repo(request)
     use_case = ActualizarDatosRepuestoUseCase(repo)
 
@@ -509,7 +581,7 @@ async def actualizar_datos_repuesto(
                 modificado_por=getattr(request.state, "usuario_id", ""),
                 nombre=body.nombre,
                 descripcion=body.descripcion,
-                categoria=body.categoria,
+                categoria=body.categoria.strip().lower() if body.categoria else None,
                 modelo=body.modelo,
                 año=body.año,
                 destacado=body.destacado,
@@ -548,7 +620,7 @@ async def actualizar_datos_repuesto(
             "codigo": repuesto.codigo,
             "nombre": repuesto.nombre,
             "descripcion": repuesto.descripcion,
-            "categoria": repuesto.categoria.value,
+            "categoria": repuesto.categoria,
             "modelo": repuesto.modelo,
             "año": repuesto.año,
             "destacado": repuesto.destacado,
@@ -1039,3 +1111,122 @@ async def subir_imagen_unica_repuesto(
         {"codigo": codigo, "imagen_url": url},
         request_id=get_request_id(request),
     )
+
+
+# ── Categorías — CRUD dinámico (sesión 2026-07-03, Pieza C) ──────────────────
+# Normaliza repuesto.categoria (varchar) contra la tabla `categoria` real
+# (FK ON UPDATE CASCADE, migración 593686985730). GET es público (pobla el
+# filtro de categoría en el catálogo); POST/PATCH/DELETE solo ADMIN/SUPERADMIN.
+
+class CategoriaResponse(BaseModel):
+    id: str
+    nombre: str
+    orden: int
+
+
+class CrearCategoriaRequest(BaseModel):
+    nombre: str = Field(min_length=1, max_length=50)
+    orden: int = 0
+
+
+class ActualizarCategoriaRequest(BaseModel):
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    orden: Optional[int] = None
+
+
+@router.get("/categorias", summary="EP-CAT-13: Listar categorías")
+async def listar_categorias(request: Request) -> dict[str, Any]:
+    """Público — sin auth. Pobla el filtro de categoría del catálogo."""
+    repo = _get_categoria_repo(request)
+    categorias = await ListarCategoriasUseCase(repo).execute()
+    return success_response(
+        {"categorias": [
+            CategoriaResponse(id=c.id, nombre=c.nombre, orden=c.orden).model_dump()
+            for c in categorias
+        ]},
+        request_id=get_request_id(request),
+    )
+
+
+@router.post(
+    "/categorias", status_code=status.HTTP_201_CREATED,
+    summary="EP-CAT-14: Crear categoría",
+)
+async def crear_categoria(
+    request: Request,
+    body: CrearCategoriaRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    repo = _get_categoria_repo(request)
+    try:
+        categoria = await CrearCategoriaUseCase(repo).execute(
+            CrearCategoriaCommand(nombre=body.nombre, orden=body.orden)
+        )
+    except CategoriaDuplicadaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(
+        CategoriaResponse(id=categoria.id, nombre=categoria.nombre, orden=categoria.orden).model_dump(),
+        status_code=201, request_id=get_request_id(request),
+    )
+
+
+@router.patch("/categorias/{categoria_id}", summary="EP-CAT-15: Actualizar categoría")
+async def actualizar_categoria(
+    request: Request,
+    categoria_id: str,
+    body: ActualizarCategoriaRequest,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> dict[str, Any]:
+    repo = _get_categoria_repo(request)
+    try:
+        categoria = await ActualizarCategoriaUseCase(repo).execute(
+            ActualizarCategoriaCommand(categoria_id=categoria_id, nombre=body.nombre, orden=body.orden)
+        )
+    except CategoriaNoEncontradaError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "CATEGORIA_NO_ENCONTRADA", f"Categoría {categoria_id!r} no encontrada",
+                request_id=get_request_id(request),
+            ),
+        )
+    except CategoriaDuplicadaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
+        )
+    return success_response(
+        CategoriaResponse(id=categoria.id, nombre=categoria.nombre, orden=categoria.orden).model_dump(),
+        request_id=get_request_id(request),
+    )
+
+
+@router.delete(
+    "/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT,
+    summary="EP-CAT-16: Eliminar categoría",
+)
+async def eliminar_categoria(
+    request: Request,
+    categoria_id: str,
+    _auth: dict = Depends(require_roles("ADMINISTRADOR", "SUPERADMIN")),
+) -> Response:
+    repo = _get_categoria_repo(request)
+    try:
+        await EliminarCategoriaUseCase(repo).execute(EliminarCategoriaCommand(categoria_id=categoria_id))
+    except CategoriaNoEncontradaError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                "CATEGORIA_NO_ENCONTRADA", f"Categoría {categoria_id!r} no encontrada",
+                request_id=get_request_id(request),
+            ),
+        )
+    except CategoriaEnUsoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("CATEGORIA_EN_USO", str(exc), request_id=get_request_id(request)),
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

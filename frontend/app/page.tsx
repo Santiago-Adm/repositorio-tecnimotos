@@ -21,7 +21,23 @@ interface Repuesto {
   imagen_principal_url?: string | null
 }
 
+interface RepuestoDetalle extends Repuesto {
+  imagen_url?: string | null
+}
+
 type Universo = 'mototaxi_3r' | 'mototaxi_4r' | 'motolineal'
+
+// Códigos reales de la migración Bajaj: sin espacios, 7-18 caracteres
+// alfanuméricos (ej. "39050302", "01100317", "KMP-P135LS") — NUNCA con el
+// formato "BAJ-4592" que asumía el placeholder original. Confirmado real:
+// 16 192/16 195 códigos son puramente numéricos, 0 códigos tienen espacio.
+// Un término de búsqueda por nombre ("filtro de aceite") sí tiene espacios,
+// así que "sin espacios y largo >= 6" separa código de nombre de forma
+// confiable sin asumir un formato fijo de código (PIEZA B, sesión 2026-07-04).
+function pareceCodigo(termino: string): boolean {
+  const t = termino.trim()
+  return t.length >= 6 && !t.includes(' ')
+}
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -32,12 +48,41 @@ export default function Home() {
 
   const [videoError, setVideoError] = useState(false)
 
+  // Búsqueda real por código exacto (GET /v1/repuestos/{codigo}) — antes el
+  // input solo filtraba en memoria los 12 destacados ya cargados, así que
+  // un código real fuera de esos 12 siempre daba "sin resultados" aunque
+  // existiera en el catálogo (PIEZA B, sesión 2026-07-04).
+  const [resultadoCodigo, setResultadoCodigo] = useState<RepuestoDetalle | null | 'no_encontrado'>(null)
+  const [buscandoCodigo, setBuscandoCodigo] = useState(false)
+  const buscandoPorCodigo = pareceCodigo(searchQuery)
+
+  useEffect(() => {
+    if (!buscandoPorCodigo) {
+      setResultadoCodigo(null)
+      return
+    }
+    let cancelado = false
+    setBuscandoCodigo(true)
+    apiClient
+      .get<RepuestoDetalle>(`/v1/repuestos/${encodeURIComponent(searchQuery.trim())}`)
+      .then(r => { if (!cancelado) setResultadoCodigo(r) })
+      .catch(() => { if (!cancelado) setResultadoCodigo('no_encontrado') })
+      .finally(() => { if (!cancelado) setBuscandoCodigo(false) })
+    return () => { cancelado = true }
+  }, [searchQuery, buscandoPorCodigo])
+
   async function cargar() {
     setError(null)
     setRepuestos(null)
     try {
       // EP-CAT-01 — sin auth, universo obligatorio (api/routes/catalogo.py). Nunca trae precio_venta.
-      const data = await apiClient.get<{ repuestos: Repuesto[] }>(`/v1/repuestos?universo=${universo}`)
+      // Landing raíz: 12 repuestos reales, no el catálogo completo (PIEZA A, sesión 2026-07-03).
+      // destacado=true prioriza la selección editorial; completar_aleatorio rellena con
+      // repuestos reales mientras Elena no cure destacados — nunca "0 repuestos" ni el
+      // universo completo sin límite.
+      const data = await apiClient.get<{ repuestos: Repuesto[] }>(
+        `/v1/repuestos?universo=${universo}&destacado=true&limit=12&completar_aleatorio=true`
+      )
       setRepuestos(data.repuestos)
     } catch (err) {
       setError(err instanceof ApiCallError ? err.code : 'ERROR_INTERNO')
@@ -190,7 +235,30 @@ export default function Home() {
               )}
             </div>
 
-            {error ? (
+            {buscandoPorCodigo ? (
+              buscandoCodigo ? (
+                <div className="py-10 flex justify-center"><LoadingIndicator message="Buscando código..." /></div>
+              ) : resultadoCodigo === 'no_encontrado' ? (
+                <div className="text-center py-16 bg-slate-800 rounded-3xl border border-slate-800 max-w-md mx-auto px-6">
+                  <h3 className="font-display font-bold text-slate-200 text-lg mb-1">Código no encontrado</h3>
+                  <p className="text-xs text-slate-400">Verifica el código exacto o intenta buscar por nombre.</p>
+                </div>
+              ) : resultadoCodigo ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-md mx-auto md:max-w-none">
+                  <RepuestoCard
+                    variant="grid"
+                    surface="dark"
+                    repuestoId={resultadoCodigo.id}
+                    codigo={resultadoCodigo.codigo}
+                    nombre={resultadoCodigo.nombre}
+                    modelo={resultadoCodigo.modelo}
+                    universo={resultadoCodigo.universo}
+                    disponible={resultadoCodigo.activo}
+                    imagenUrl={resultadoCodigo.imagen_principal_url}
+                  />
+                </div>
+              ) : null
+            ) : error ? (
               <ErrorDisplay code={error} onRetry={cargar} context="catálogo público" />
             ) : repuestos === null ? (
               <LoadingIndicator message="Cargando catálogo..." />

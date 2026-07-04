@@ -30,7 +30,7 @@ class CatalogoServiceImpl:
             codigo=repuesto.codigo,
             precio_venta=repuesto.precio_venta,
             nombre=repuesto.nombre,
-            categoria=repuesto.categoria.value,
+            categoria=repuesto.categoria,
             universo=repuesto.universo.value,
             activo=repuesto.activo,
         )

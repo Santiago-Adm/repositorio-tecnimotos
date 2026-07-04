@@ -142,7 +142,7 @@ class ConsultarListaCodigosUseCase:
                 universo=repuesto.universo.value,
                 modelo=repuesto.modelo,
                 año=repuesto.año,
-                categoria=repuesto.categoria.value,
+                categoria=repuesto.categoria,
                 activo=repuesto.activo,
                 advertencia_instalacion=repuesto.requiere_advertencia_instalacion(),
                 stock_disponible=stock_count,

@@ -58,6 +58,10 @@ from src.catalogo.infrastructure.repositories.imagen_repuesto_repository_inmemor
 )
 from src.catalogo.infrastructure.storage.inmemory_imagen_storage import InMemoryImagenStorage
 from src.catalogo.infrastructure.storage.r2_imagen_storage import R2ImagenStorage
+from src.catalogo.infrastructure.repositories.categoria_repository_inmemory import (
+    InMemoryCategoriaRepository,
+)
+from src.catalogo.domain.models.categoria import Categoria
 from src.shared.infrastructure.settings import get_settings
 from src.pedidos.application.use_cases.gestionar_plan_mantenimiento import (
     ProcesarRecordatoriosMantenimientoUseCase,
@@ -71,6 +75,14 @@ configure_logging(
 )
 
 logger = logging.getLogger(__name__)
+
+# Mismos 9 valores sembrados por la migración 593686985730 (categoria_normalizada)
+# — mantiene InMemory y PG en paridad para tests/dev sin BD.
+_CATEGORIAS_SEED_INMEMORY = [
+    ("motor", 1), ("transmision", 2), ("frenos", 3), ("electrico", 4),
+    ("carroceria", 5), ("suspension", 6), ("tecnico_especializado", 7),
+    ("consumible", 8), ("otro", 9),
+]
 
 
 async def _job_recordatorios_mantenimiento(app: FastAPI) -> None:
@@ -177,6 +189,12 @@ def create_app() -> FastAPI:
     app.state.session_store = InMemorySessionStore()
     app.state.parametros_service = InMemoryParametrosService()
     app.state.soporte_repo = InMemoryReporteSoporteRepository()
+
+    app.state.categoria_repo = InMemoryCategoriaRepository()
+    app.state.categoria_repo.vincular_repuesto_repo(app.state.catalogo_repo)
+    for _nombre, _orden in _CATEGORIAS_SEED_INMEMORY:
+        _cat = Categoria(nombre=_nombre, orden=_orden)
+        app.state.categoria_repo._store[_cat.id] = _cat  # noqa: SLF001 — seed directo, mismo patrón que otros stores
 
     # Clave de bootstrap SUPERADMIN — vacío si no está configurada (EP-AUTH-06)
     app.state.superadmin_bootstrap_key = settings.superadmin_bootstrap_key

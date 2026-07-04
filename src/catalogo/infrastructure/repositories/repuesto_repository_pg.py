@@ -11,7 +11,6 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.catalogo.domain.models.repuesto import (
-    CategoriaRepuesto,
     HistorialPrecio,
     Repuesto,
     UniversoRepuesto,
@@ -54,6 +53,8 @@ class RepuestoRepositoryPG:
         año: Optional[int] = None,
         solo_disponibles: bool = True,
         destacado: Optional[bool] = None,
+        random_order: bool = False,
+        limit: Optional[int] = None,
     ) -> list[Repuesto]:
         conditions = [
             RepuestoModel.universo == universo.value,
@@ -69,8 +70,22 @@ class RepuestoRepositoryPG:
             conditions.append(RepuestoModel.destacado == destacado)
 
         stmt = select(RepuestoModel).where(and_(*conditions))
+        if random_order:
+            stmt = stmt.order_by(func.random())
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await self._session.execute(stmt)
         return [self._to_domain(m) for m in result.scalars().all()]
+
+    async def listar_modelos_distintos(self, universo: UniversoRepuesto) -> list[str]:
+        stmt = (
+            select(RepuestoModel.modelo)
+            .where(RepuestoModel.universo == universo.value, RepuestoModel.activo == True)
+            .distinct()
+            .order_by(RepuestoModel.modelo)
+        )
+        result = await self._session.execute(stmt)
+        return [row[0] for row in result.all()]
 
     async def buscar_por_lista_codigos(
         self,
@@ -160,7 +175,7 @@ class RepuestoRepositoryPG:
             universo=repuesto.universo.value,
             modelo=repuesto.modelo,
             año=repuesto.año,
-            categoria=repuesto.categoria.value,
+            categoria=repuesto.categoria,
             precio_venta=repuesto.precio_venta,
             activo=repuesto.activo,
             imagen_url=repuesto.imagen_url,
@@ -177,7 +192,7 @@ class RepuestoRepositoryPG:
             universo=UniversoRepuesto(model.universo),
             modelo=model.modelo,
             año=model.año,
-            categoria=CategoriaRepuesto(model.categoria),
+            categoria=model.categoria,
             precio_venta=Decimal(str(model.precio_venta)),
             activo=model.activo,
             imagen_url=model.imagen_url,

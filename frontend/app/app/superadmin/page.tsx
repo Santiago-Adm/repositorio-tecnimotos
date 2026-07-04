@@ -6,10 +6,13 @@ import { useAuth } from '@/src/context/AuthContext'
 import { apiClient } from '@/src/lib/api-client'
 import { ApiCallError, Rol } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
+import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
+
+type Seccion = 'Catálogo' | 'Categorías' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'
 
 // Mapeos visuales para roles
 const ROL_LABELS: Record<string, string> = {
@@ -91,7 +94,7 @@ export default function SuperadminDashboard() {
   const router = useRouter()
 
   // Navegación
-  const [seccion, setSeccion] = useState<'Catálogo' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'>('Logs y config')
+  const [seccion, setSeccion] = useState<Seccion>('Logs y config')
   const [adminTab, setAdminTab] = useState<'usuarios' | 'pendientes' | 'parametros'>('usuarios')
 
   // Sincronizar sección con URL query params para navegación y persistencia (evita pérdida de estado en refresco)
@@ -99,8 +102,8 @@ export default function SuperadminDashboard() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const secParam = params.get('seccion')
-      const validSections: Array<'Catálogo' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'> = [
-        'Catálogo', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
+      const validSections: Array<Seccion> = [
+        'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
       ]
       if (secParam === 'Logs') {
         setSeccion('Logs y config')
@@ -110,7 +113,7 @@ export default function SuperadminDashboard() {
     }
   }, [])
 
-  const handleSetSeccion = (sec: 'Catálogo' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config') => {
+  const handleSetSeccion = (sec: Seccion) => {
     setSeccion(sec)
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href)
@@ -431,7 +434,7 @@ export default function SuperadminDashboard() {
             onChange={e => handleSetSeccion(e.target.value as any)}
             className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold font-body focus:outline-none focus:ring-2 focus:ring-teal"
           >
-            {(['Catálogo', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
+            {(['Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
               <option key={m} value={m}>
                 {m === 'Logs y config' ? 'Logs y config (Inicio)' : m}
               </option>
@@ -441,7 +444,7 @@ export default function SuperadminDashboard() {
 
         {/* SIDEBAR NAVIGATION */}
         <nav className="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1.5 bg-slate-900/40">
-          {(['Catálogo', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
+          {(['Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
             <button
               key={m}
               onClick={() => handleSetSeccion(m)}
@@ -967,6 +970,8 @@ export default function SuperadminDashboard() {
               )}
             </div>
           )}
+
+          {seccion === 'Categorías' && <CategoriasManager />}
 
           {/* 4. SECCIÓN: STOCK */}
           {seccion === 'Stock' && (

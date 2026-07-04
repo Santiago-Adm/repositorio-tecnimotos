@@ -6,6 +6,7 @@ import { useAuth } from '@/src/context/AuthContext'
 import { apiClient } from '@/src/lib/api-client'
 import { ApiCallError } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
+import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
@@ -26,7 +27,7 @@ interface StockResponse {
   total: number
 }
 
-type Seccion = 'Stock' | 'Catálogo' | 'Pedidos' | 'Taller' | 'Admin'
+type Seccion = 'Stock' | 'Catálogo' | 'Categorías' | 'Pedidos' | 'Taller' | 'Admin'
 
 export default function AdministradorDashboard() {
   const { user, logout } = useAuth()
@@ -64,7 +65,7 @@ export default function AdministradorDashboard() {
       <div className="flex">
         {/* Navegación — 02 §4.1 ADMINISTRADOR */}
         <nav className="hidden md:flex flex-col w-48 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1">
-          {(['Stock', 'Catálogo', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
+          {(['Stock', 'Catálogo', 'Categorías', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
             <button
               key={m}
               onClick={() => setSeccion(m)}
@@ -78,13 +79,16 @@ export default function AdministradorDashboard() {
         </nav>
 
         <main className="flex-1 p-6 space-y-6">
-          {seccion !== 'Stock' && (
+          {seccion !== 'Stock' && seccion !== 'Categorías' && (
             <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
               <p className="text-slate-400 font-body text-sm">
                 Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
               </p>
             </section>
           )}
+
+          {seccion === 'Categorías' && <CategoriasManager />}
+
           {seccion === 'Stock' && alertas.length > 0 && (
             <section>
               <h2 className="font-display text-base font-semibold text-electric mb-3">

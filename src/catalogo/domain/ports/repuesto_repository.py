@@ -24,7 +24,11 @@ class RepuestoRepository(Protocol):
         año: Optional[int] = None,
         solo_disponibles: bool = True,
         destacado: Optional[bool] = None,
+        random_order: bool = False,
+        limit: Optional[int] = None,
     ) -> list[Repuesto]: ...
+
+    async def listar_modelos_distintos(self, universo: UniversoRepuesto) -> list[str]: ...
 
     async def buscar_por_lista_codigos(
         self,

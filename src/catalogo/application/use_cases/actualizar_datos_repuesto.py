@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.catalogo.domain.models.repuesto import (
-    CategoriaRepuesto,
     Repuesto,
     RepuestoDadoDeBajaError,
     RepuestoNoEncontradoError,
@@ -27,7 +26,7 @@ class ActualizarDatosCommand:
     modificado_por: str
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
-    categoria: Optional[CategoriaRepuesto] = None
+    categoria: Optional[str] = None
     modelo: Optional[str] = None
     año: Optional[int] = None
     destacado: Optional[bool] = None

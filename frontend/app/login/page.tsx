@@ -68,7 +68,12 @@ function LoginContent() {
   async function handleMfa(e: React.FormEvent) {
     e.preventDefault()
     setErrorMsg(null)
-    if (totp === '123456') {
+    // R28: bloquear el código obvio "123456" solo en producción (NODE_ENV,
+    // inyectado por Next.js en build/start — 'development' en `next dev`).
+    // En desarrollo los 9 roles "de forma" (ADR-011) aceptan cualquier
+    // 6 dígitos por diseño del backend — bloquear aquí sin distinguir
+    // entorno rompía el login de VENDEDOR/MECANICO_*/CLIENTE_* en local.
+    if (totp === '123456' && process.env.NODE_ENV === 'production') {
       setErrorMsg('Código de bypass no permitido en producción.')
       return
     }
