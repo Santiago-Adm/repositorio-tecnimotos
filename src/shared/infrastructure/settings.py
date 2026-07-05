@@ -62,12 +62,6 @@ class Settings(BaseSettings):
     resend_api_key: str = Field(default="")
     mfa_email_from: str = Field(default="Tecnimotos <onboarding@resend.dev>")
 
-    # Pieza 6-bis: SUPERADMIN solo puede conectarse desde estas IPs (Tailscale
-    # fija de Sant) — lista separada por comas. Solo se aplica cuando
-    # environment == "production" (mismo patrón fail-safe que email_sender.py:
-    # nunca bloquea en desarrollo/test, donde la IP real de Tailscale no aplica).
-    superadmin_allowed_ips: str = Field(default="")
-
 
 @lru_cache
 def get_settings() -> Settings:

@@ -126,23 +126,6 @@ async def _registrar_fallo_login(request: Request) -> None:
         )
 
 
-def _superadmin_ip_autorizada(request: Request) -> bool:
-    """Pieza 6-bis: SUPERADMIN solo conecta desde IPs fijas de Tailscale
-    (SUPERADMIN_ALLOWED_IPS). Fail-safe idéntico al de email_sender.py:
-    comparación estricta == "production" — cualquier otro valor de
-    ENVIRONMENT (incluido ausente o mal escrito) nunca bloquea, porque solo
-    Railway/producción real debe declarar ENVIRONMENT=production."""
-    settings = get_settings()
-    if settings.environment != "production":
-        return True
-    allowed = {ip.strip() for ip in settings.superadmin_allowed_ips.split(",") if ip.strip()}
-    if not allowed:
-        # Sin lista configurada en producción — fail-closed, no fail-open,
-        # para un rol de máximo privilegio.
-        return False
-    return _ip_cliente(request) in allowed
-
-
 async def _emitir_tokens_sesion(
     request: Request, response: Response, user, session_store,
 ) -> dict[str, Any]:
@@ -240,21 +223,6 @@ async def login(request: Request, body: LoginRequest, response: Response) -> dic
             detail=error_response(
                 "CUENTA_BLOQUEADA_TEMPORAL",
                 "Demasiados intentos fallidos de verificación. Intenta de nuevo en unos minutos.",
-                request_id=get_request_id(request),
-            ),
-        )
-
-    # Pieza 6-bis: SUPERADMIN solo desde IP de Tailscale autorizada (producción).
-    if user.rol == "SUPERADMIN" and not _superadmin_ip_autorizada(request):
-        logger.warning(
-            "login: SUPERADMIN desde IP no autorizada",
-            extra={"usuario_id": user.usuario_id, "ip": _ip_cliente(request), "request_id": get_request_id(request)},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_response(
-                "RED_NO_AUTORIZADA",
-                "SUPERADMIN solo puede conectarse desde la red autorizada.",
                 request_id=get_request_id(request),
             ),
         )
