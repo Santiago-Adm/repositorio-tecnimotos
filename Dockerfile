@@ -50,4 +50,12 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Railway: Release Command = alembic upgrade head
 # Docker Compose: command sobrescribe con alembic upgrade head && uvicorn ...
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#
+# --proxy-headers --forwarded-allow-ips="*": Railway termina TLS en su propio
+# edge y reenvía al contenedor a través de su red interna — sin esto, Uvicorn
+# reporta la IP interna del proxy de Railway como request.client.host para
+# TODAS las peticiones, no la IP real del cliente. Esto rompe tanto el
+# candado de red de SUPERADMIN (07 §Pieza 6-bis) como el conteo por IP del
+# bloqueo de fuerza bruta (07 §2.5) — con este flag, Uvicorn lee la IP real
+# desde X-Forwarded-For, que Railway sí añade correctamente.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
