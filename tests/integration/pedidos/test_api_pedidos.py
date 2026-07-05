@@ -69,6 +69,31 @@ class TestEPPED02ListarPedidos:
         response = await pedidos_client.get("/v1/pedidos", params={"cliente_id": "cli-filtro"})
         assert response.json()["data"]["total"] == 1
 
+    async def test_listar_sin_token_rechaza(self, pedidos_client):
+        response = await pedidos_client.get("/v1/pedidos", headers={"Authorization": ""})
+        assert response.status_code == 401
+
+    async def test_cliente_no_puede_listar_pedidos_ajenos(self, pedidos_client):
+        # CLIENTE_CONDUCTOR intenta listar los pedidos de "cli-filtro" (IDOR) —
+        # InMemoryPedidoRepository.obtener_cliente_id_por_usuario() siempre
+        # devuelve None (no modela `cliente` como entidad propia — el vínculo
+        # real usuario→cliente solo existe en Postgres, ver
+        # test_gestion_usuarios_historial_pg.py), así que el endpoint corta a
+        # lista vacía sin llegar a "sin filtro = todos" (ver ruta real en
+        # listar_pedidos). El happy path con cliente_id resuelto de verdad se
+        # verifica contra Postgres real, no aquí.
+        await pedidos_client.post(
+            "/v1/pedidos",
+            json={"canal_origen": "presencial", "items": [], "cliente_id": "cli-filtro"},
+        )
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_CONDUCTOR", sub="otro-cliente")
+        response = await pedidos_client.get(
+            "/v1/pedidos",
+            params={"cliente_id": "cli-filtro"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["data"]["total"] == 0
+
 
 class TestEPPED03ObtenerPedido:
     async def test_obtener_existente(self, pedidos_client):
@@ -80,6 +105,25 @@ class TestEPPED03ObtenerPedido:
     async def test_obtener_inexistente(self, pedidos_client):
         response = await pedidos_client.get("/v1/pedidos/id-99999")
         assert response.status_code == 404
+
+    async def test_cliente_no_puede_obtener_pedido_ajeno(self, pedidos_client):
+        # CLIENTE_CONDUCTOR "otro-cliente" intenta consultar el pedido de "cli-dueno" (IDOR)
+        crear = await pedidos_client.post(
+            "/v1/pedidos",
+            json={"canal_origen": "presencial", "items": [], "cliente_id": "cli-dueno"},
+        )
+        pedido_id = crear.json()["data"]["pedido_id"]
+        token = make_test_token(pedidos_client._test_private_pem, "CLIENTE_CONDUCTOR", sub="otro-cliente")
+        response = await pedidos_client.get(
+            f"/v1/pedidos/{pedido_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+    # No hay equivalente InMemory de "cliente puede obtener su propio pedido":
+    # requiere que obtener_cliente_id_por_usuario() resuelva un cliente_id
+    # real, y solo PedidoRepositoryPG lo hace (ver arriba). Ese happy path se
+    # verifica en test_scoping_cliente_pedidos_pg.py contra Postgres real.
 
 
 class TestEPPED04ConfirmarPedido:
@@ -265,14 +309,14 @@ class TestEPPED09Envio:
 
         response = await pedidos_client.post(
             f"/v1/pedidos/{pedido_id}/envio",
-            json={"empresa_encomienda": "Olva", "direccion_destino": "Huancayo 123"},
+            json={"empresa_encomienda": "Olva", "direccion_destino": "Huancayo 123", "distrito": "AYACUCHO"},
         )
         assert response.status_code in (201, 422)
 
     async def test_envio_pedido_inexistente(self, pedidos_client):
         response = await pedidos_client.post(
             "/v1/pedidos/id-99999/envio",
-            json={"empresa_encomienda": "Olva", "direccion_destino": "Huancayo"},
+            json={"empresa_encomienda": "Olva", "direccion_destino": "Huancayo", "distrito": "AYACUCHO"},
         )
         assert response.status_code == 404
 

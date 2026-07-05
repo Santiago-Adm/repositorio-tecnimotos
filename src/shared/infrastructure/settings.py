@@ -36,6 +36,12 @@ class Settings(BaseSettings):
 
     fernet_key: str = Field(default="")
 
+    # Pieza de verificación profunda (2026-07-05) — 07-criterios-seguridad-
+    # ejecutables.md §2.1 exige Argon2id + pepper; el código usaba PBKDF2 sin
+    # pepper (hallazgo real, corregido). El pepper es un secreto de servidor
+    # separado de la sal (que sí vive en cada hash) — nunca en la base de datos.
+    argon2_pepper: str = Field(default="")
+
     superadmin_bootstrap_key: str = Field(default="")
 
     whatsapp_api_token: str = Field(default="")
@@ -55,6 +61,12 @@ class Settings(BaseSettings):
     # MFA por correo — ADR-011. Resend HTTP API (Railway no da SMTP propio).
     resend_api_key: str = Field(default="")
     mfa_email_from: str = Field(default="Tecnimotos <onboarding@resend.dev>")
+
+    # Pieza 6-bis: SUPERADMIN solo puede conectarse desde estas IPs (Tailscale
+    # fija de Sant) — lista separada por comas. Solo se aplica cuando
+    # environment == "production" (mismo patrón fail-safe que email_sender.py:
+    # nunca bloquea en desarrollo/test, donde la IP real de Tailscale no aplica).
+    superadmin_allowed_ips: str = Field(default="")
 
 
 @lru_cache

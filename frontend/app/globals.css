@@ -14,6 +14,16 @@
   --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* MASTER.md — prefers-reduced-motion global (Pieza 1.D): Framer Motion ya lo
+ * respeta vía useReducedMotion() en TiltCard/AppSidebarNav; esta regla cubre
+ * las animaciones CSS crudas de Tailwind (animate-ping/pulse/bounce/spin)
+ * que no pasan por Framer Motion, como el indicador "en vivo" de alertas. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping, .animate-pulse, .animate-bounce {
+    animation: none !important;
+  }
+}
+
 /*
  * §3.7.2 — sistema de temas (EP-USR-01): 6 variantes por superficie de rol
  *

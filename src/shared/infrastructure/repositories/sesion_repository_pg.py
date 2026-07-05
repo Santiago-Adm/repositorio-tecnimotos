@@ -10,6 +10,7 @@ distintos en producción.
 from __future__ import annotations
 
 import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -22,7 +23,7 @@ from api.auth_stores import (
     _verificar_codigo_mfa,
     generar_codigo_mfa,
 )
-from src.shared.infrastructure.models.usuario_model import MfaSesionModel, SesionModel
+from src.shared.infrastructure.models.usuario_model import DispositivoConfiableModel, MfaSesionModel, SesionModel
 
 
 class SesionRepositoryPG:
@@ -106,7 +107,7 @@ class SesionRepositoryPG:
     def _hash_refresh(self, token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    async def crear_sesion(self, usuario_id: str) -> tuple[str, str]:
+    async def crear_sesion(self, usuario_id: str, idle_window_minutos: int = 15) -> tuple[str, str]:
         session_id = str(uuid.uuid4())
         refresh_raw = str(uuid.uuid4())
         model = SesionModel(
@@ -116,7 +117,8 @@ class SesionRepositoryPG:
             jti=str(uuid.uuid4()),
             mfa_completado=True,
             estado="ACTIVA",
-            expira_en=datetime.now(timezone.utc) + timedelta(days=self.REFRESH_TTL_DAYS),
+            idle_window_minutos=idle_window_minutos,
+            expira_en=datetime.now(timezone.utc) + timedelta(minutes=idle_window_minutos),
         )
         self._session.add(model)
         await self._session.flush()
@@ -129,6 +131,9 @@ class SesionRepositoryPG:
         return result.scalar_one_or_none()
 
     async def rotar_refresh(self, refresh_raw: str) -> Optional[tuple[str, str, str]]:
+        """Sesión deslizante (Pieza 6-bis): cada rotación exitosa extiende
+        expira_en otra vez por idle_window_minutos — solo muere de verdad si
+        nadie llama a refresh dentro de esa ventana (inactividad real)."""
         model = await self._obtener_por_refresh(refresh_raw)
         if not model or model.estado == "REVOCADA":
             return None
@@ -142,6 +147,7 @@ class SesionRepositoryPG:
 
         nuevo_raw = str(uuid.uuid4())
         model.refresh_token_hash = self._hash_refresh(nuevo_raw)
+        model.expira_en = datetime.now(timezone.utc) + timedelta(minutes=model.idle_window_minutos)
         await self._session.flush()
         return model.usuario_id, model.id, nuevo_raw
 
@@ -150,5 +156,36 @@ class SesionRepositoryPG:
         if not model:
             return False
         model.estado = "REVOCADA"
+        await self._session.flush()
+        return True
+
+    # ── Dispositivo confiable (Pieza 6-bis) ──
+
+    def _hash_dispositivo(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    async def crear_dispositivo_confiable(self, usuario_id: str) -> str:
+        token_raw = secrets.token_urlsafe(32)
+        model = DispositivoConfiableModel(
+            id=str(uuid.uuid4()),
+            usuario_id=usuario_id,
+            token_hash=self._hash_dispositivo(token_raw),
+        )
+        self._session.add(model)
+        await self._session.flush()
+        return token_raw
+
+    async def verificar_dispositivo(self, usuario_id: str, token_raw: str) -> bool:
+        if not token_raw:
+            return False
+        stmt = select(DispositivoConfiableModel).where(
+            DispositivoConfiableModel.token_hash == self._hash_dispositivo(token_raw),
+            DispositivoConfiableModel.usuario_id == usuario_id,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if not model:
+            return False
+        model.ultimo_uso = datetime.now(timezone.utc)
         await self._session.flush()
         return True

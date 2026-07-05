@@ -31,12 +31,22 @@ COPY --from=builder /usr/local/bin/alembic /usr/local/bin/alembic
 COPY --chown=app:app alembic/ alembic/
 COPY --chown=app:app alembic.ini alembic.ini
 
+# Materializa las llaves JWT desde variables de entorno en Railway (sin
+# volumen local como en docker-compose) — ver docker-entrypoint.sh.
+COPY --chown=app:app docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+# mkdir aquí (como root, antes de USER app) — el directorio debe ser escribible
+# por el usuario "app" para que el entrypoint pueda escribir las llaves.
+RUN mkdir -p /app/keys && chown app:app /app/keys
+
 USER app
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')" || exit 1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Railway: Release Command = alembic upgrade head
 # Docker Compose: command sobrescribe con alembic upgrade head && uvicorn ...

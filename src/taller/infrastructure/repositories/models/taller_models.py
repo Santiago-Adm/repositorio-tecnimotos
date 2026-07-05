@@ -89,6 +89,7 @@ class OrdenTrabajoModel(Base):
     cobro_confirmado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     costo_mano_obra: Mapped[object | None] = mapped_column(Numeric(12, 2), nullable=True)
     monto_estimado: Mapped[object] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    aceptada_en: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -226,4 +227,22 @@ class RendicionMecanicoModel(Base):
         CheckConstraint("estado IN ('PENDIENTE','APROBADA','PAGADA')", name="chk_rendicion_estado"),
         Index("idx_rendicion_mecanico", "mecanico_id"),
         Index("idx_rendicion_estado", "estado"),
+    )
+
+
+class OrdenTrabajoEventoModel(Base):
+    """Auditoría append-only de acciones sobre una OT (R29, FASE 2)."""
+    __tablename__ = "orden_trabajo_evento"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    ot_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("orden_trabajo.id"), nullable=False)
+    evento: Mapped[str] = mapped_column(String(50), nullable=False)
+    estado_anterior: Mapped[str] = mapped_column(String(20), nullable=False)
+    estado_nuevo: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    timestamp: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ot_evento_ot", "ot_id"),
+        Index("idx_ot_evento_actor", "actor_id"),
     )

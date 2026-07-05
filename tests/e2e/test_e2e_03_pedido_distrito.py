@@ -102,6 +102,7 @@ class TestE2E03PedidoDistrito:
             json={
                 "empresa_encomienda": "Marvisur",
                 "direccion_destino": "Jr. Lima 123, Huamanga, Ayacucho",
+                "distrito": "AYACUCHO",
             },
         )
         assert r4.status_code == 201

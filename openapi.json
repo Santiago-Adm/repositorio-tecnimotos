@@ -11,7 +11,7 @@
           "auth"
         ],
         "summary": "EP-AUTH-01: Login con credenciales",
-        "description": "Público — sin token.\nBloqueo 15 min tras 10 intentos fallidos/IP (07 §2.5).\nInMemory: rate limiting simplificado.",
+        "description": "Público — sin token.\nBloqueo 15 min tras 10 intentos fallidos/IP (07 §2.5).\nInMemory: rate limiting simplificado.\nPieza 6-bis: si body.device_token coincide con un dispositivo ya\nverificado por MFA antes, se saltan mfa_session/EP-AUTH-02 por completo\ny se emiten los tokens de una — \"mismo dispositivo, solo contraseña\".",
         "operationId": "login_v1_auth_login_post",
         "requestBody": {
           "content": {
@@ -1033,6 +1033,142 @@
         }
       }
     },
+    "/v1/admin/incidentes": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-13: Reportar incidente del sistema",
+        "operationId": "crear_incidente_v1_admin_incidentes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearIncidenteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Crear Incidente V1 Admin Incidentes Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-14: Listar incidentes del sistema",
+        "operationId": "listar_incidentes_v1_admin_incidentes_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Incidentes V1 Admin Incidentes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/incidentes/{incidente_id}/resolver": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "EP-ADM-15: Resolver incidente del sistema",
+        "operationId": "resolver_incidente_v1_admin_incidentes__incidente_id__resolver_patch",
+        "parameters": [
+          {
+            "name": "incidente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Incidente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Resolver Incidente V1 Admin Incidentes  Incidente Id  Resolver Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/impersonate": {
       "post": {
         "tags": [
@@ -1070,6 +1206,511 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/ingresos-mensuales": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Ingresos emitidos agrupados por mes, últimos N meses (una sola consulta)",
+        "description": "Sustituye el patrón ingenuo de llamar metricas-negocio N veces (una por\nmes) — cada llamada recorre OTs/pedidos/stock completos aunque solo se\nnecesite el ingreso del mes. Una sola lectura de comprobantes + agregación\nen Python, mismo costo que un mes individual.",
+        "operationId": "obtener_ingresos_mensuales_v1_analitica_ingresos_mensuales_get",
+        "parameters": [
+          {
+            "name": "meses",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 36,
+              "minimum": 1,
+              "default": 12,
+              "title": "Meses"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Ingresos Mensuales V1 Analitica Ingresos Mensuales Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/series": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Serie temporal diaria — ventas, ingresos o clientes nuevos",
+        "description": "Scoping server-side por rol (mismo criterio IDOR-safe que GET /v1/pedidos):\nCLIENTE_* siempre ve solo su propio historial; VENDEDOR ve solo lo que él\nregistró; roles de administración ven el agregado global.",
+        "operationId": "obtener_serie_v1_analitica_series_get",
+        "parameters": [
+          {
+            "name": "metrica",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(ventas|ingresos|clientes_nuevos)$",
+              "title": "Metrica"
+            }
+          },
+          {
+            "name": "dias",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 7,
+              "title": "Dias"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Serie V1 Analitica Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/rankings": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Top N vendedores por ventas o mecánicos por OTs completadas",
+        "operationId": "obtener_rankings_v1_analitica_rankings_get",
+        "parameters": [
+          {
+            "name": "tipo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(vendedores|mecanicos)$",
+              "title": "Tipo"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 3,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Rankings V1 Analitica Rankings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/distribucion": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Distribución de pedidos/ingresos por corte (universo, categoría, distrito, día de semana, estado de pago)",
+        "operationId": "obtener_distribucion_v1_analitica_distribucion_get",
+        "parameters": [
+          {
+            "name": "por",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(universo|categoria|distrito|dia_semana|estado_comprobante)$",
+              "title": "Por"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Distribucion V1 Analitica Distribucion Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/mis-categorias": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Mis categorías más compradas (CLIENTE_*)",
+        "operationId": "obtener_mis_categorias_v1_analitica_mis_categorias_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Mis Categorias V1 Analitica Mis Categorias Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/stock-radar": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Repuestos por nivel de stock (crítico/bajo/óptimo) y categoría",
+        "description": "Pieza G (sesión catálogo/UI, 2026-07-05) — versión original cargaba\nlos 16 195 repuestos completos (3 llamadas a `catalogo_repo.buscar`) más\ntodo `stock_repuesto` en memoria de Python para clasificar fila por fila\n(~2.98s medido en vivo, FASE 0.1). Con BD real se reemplaza por una sola\nagregación SQL (CASE + GROUP BY) que replica exactamente la regla de\n`StockRepuesto.esta_bajo_umbral()` — sin BD (InMemory/tests) se conserva\nel cálculo en Python como respaldo.",
+        "operationId": "obtener_stock_radar_v1_analitica_stock_radar_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Stock Radar V1 Analitica Stock Radar Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/duracion-atencion": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Duración real de atención por pedido (scatter) — desde pedido_evento",
+        "operationId": "obtener_duracion_atencion_v1_analitica_duracion_atencion_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Duracion Atencion V1 Analitica Duracion Atencion Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/ot-a-tiempo": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "% de OTs cerradas dentro del umbral de días configurado (ADR-015)",
+        "operationId": "obtener_ot_a_tiempo_v1_analitica_ot_a_tiempo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Ot A Tiempo V1 Analitica Ot A Tiempo Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/reservas-totales": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Total de reservas registradas",
+        "operationId": "obtener_reservas_totales_v1_analitica_reservas_totales_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Reservas Totales V1 Analitica Reservas Totales Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/repuestos-mas-vendidos": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Repuestos más vendidos por cantidad (últimos 30 días)",
+        "operationId": "obtener_repuestos_mas_vendidos_v1_analitica_repuestos_mas_vendidos_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Obtener Repuestos Mas Vendidos V1 Analitica Repuestos Mas Vendidos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/mecanico/repuestos-consumidos": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "Cantidad de repuestos consumidos por el mecánico en sus OTs este mes",
+        "operationId": "obtener_repuestos_consumidos_v1_analitica_mecanico_repuestos_consumidos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Repuestos Consumidos V1 Analitica Mecanico Repuestos Consumidos Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analitica/mecanico/ots-por-universo": {
+      "get": {
+        "tags": [
+          "analitica"
+        ],
+        "summary": "OTs del mecánico agrupadas por universo del vehículo",
+        "operationId": "obtener_ots_por_universo_v1_analitica_mecanico_ots_por_universo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obtener Ots Por Universo V1 Analitica Mecanico Ots Por Universo Get"
                 }
               }
             }
@@ -2525,6 +3166,22 @@
               ],
               "title": "Cliente Id"
             }
+          },
+          {
+            "name": "mios",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mios"
+            }
           }
         ],
         "responses": {
@@ -2546,6 +3203,29 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/comprobantes/mios": {
+      "get": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-22: Mis comprobantes emitidos (VENDEDOR)",
+        "operationId": "listar_mis_comprobantes_v1_pedidos_comprobantes_mios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Mis Comprobantes V1 Pedidos Comprobantes Mios Get"
                 }
               }
             }
@@ -2580,6 +3260,50 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Obtener Pedido V1 Pedidos  Pedido Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pedidos/{pedido_id}/eventos": {
+      "get": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-20: Auditoría de eventos del pedido (R29, FASE 2)",
+        "operationId": "listar_eventos_pedido_v1_pedidos__pedido_id__eventos_get",
+        "parameters": [
+          {
+            "name": "pedido_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pedido Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Eventos Pedido V1 Pedidos  Pedido Id  Eventos Get"
                 }
               }
             }
@@ -3001,6 +3725,29 @@
         }
       }
     },
+    "/v1/lista-reserva-progresiva/mias": {
+      "get": {
+        "tags": [
+          "pedidos"
+        ],
+        "summary": "EP-PED-21: Mis listas de reserva progresiva (CLIENTE_DISTRITO)",
+        "operationId": "listar_mis_listas_reserva_v1_lista_reserva_progresiva_mias_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Mis Listas Reserva V1 Lista Reserva Progresiva Mias Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/lista-reserva-progresiva": {
       "post": {
         "tags": [
@@ -3312,6 +4059,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mis-vehiculos": {
+      "get": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-16: Listar mis vehículos (CLIENTE_*) — Pieza C, sesión de catálogo",
+        "description": "Resuelve el cliente_id real del usuario autenticado (igual criterio que\nGET /v1/pedidos) y devuelve sus vehículos — sin esto, el catálogo no puede\nauto-filtrarse por universo/modelo del vehículo del cliente.",
+        "operationId": "listar_mis_vehiculos_v1_mis_vehiculos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Listar Mis Vehiculos V1 Mis Vehiculos Get"
                 }
               }
             }
@@ -3978,6 +4749,50 @@
         }
       }
     },
+    "/v1/ordenes-trabajo/{ot_id}/eventos": {
+      "get": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-15: Auditoría de eventos de la OT (R29, FASE 2)",
+        "operationId": "listar_eventos_ot_v1_ordenes_trabajo__ot_id__eventos_get",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Eventos Ot V1 Ordenes Trabajo  Ot Id  Eventos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/ordenes-trabajo/{ot_id}": {
       "get": {
         "tags": [
@@ -4005,6 +4820,51 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Obtener Ot V1 Ordenes Trabajo  Ot Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ordenes-trabajo/{ot_id}/aceptar": {
+      "post": {
+        "tags": [
+          "taller"
+        ],
+        "summary": "EP-TAL-17: Aceptar OT asignada (Pieza E)",
+        "description": "MECANICO_MASTER reconoce formalmente una OT ya asignada — registra\n`aceptada_en` (auditoría), no cambia `estado`. Solo el mecánico asignado\na esta OT puede aceptarla.",
+        "operationId": "aceptar_ot_v1_ordenes_trabajo__ot_id__aceptar_post",
+        "parameters": [
+          {
+            "name": "ot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Aceptar Ot V1 Ordenes Trabajo  Ot Id  Aceptar Post"
                 }
               }
             }
@@ -4831,6 +5691,27 @@
         ],
         "title": "CrearCategoriaRequest"
       },
+      "CrearIncidenteRequest": {
+        "properties": {
+          "descripcion": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Descripcion"
+          },
+          "severidad": {
+            "type": "string",
+            "pattern": "^(BAJA|MEDIA|ALTA|CRITICA)$",
+            "title": "Severidad"
+          }
+        },
+        "type": "object",
+        "required": [
+          "descripcion",
+          "severidad"
+        ],
+        "title": "CrearIncidenteRequest"
+      },
       "CrearListaReservaRequest": {
         "properties": {
           "cliente_id": {
@@ -5130,7 +6011,7 @@
         "properties": {
           "universo": {
             "type": "string",
-            "pattern": "^(mototaxi|motolineal)$",
+            "pattern": "^(motolineal|mototaxi_3r|mototaxi_4r)$",
             "title": "Universo"
           },
           "modelo": {
@@ -5189,6 +6070,29 @@
           "motivo"
         ],
         "title": "DarDeBajaRequest"
+      },
+      "DistritoAyacucho": {
+        "type": "string",
+        "enum": [
+          "AYACUCHO",
+          "ACOCRO",
+          "ACOS_VINCHOS",
+          "CARMEN_ALTO",
+          "CHIARA",
+          "OCROS",
+          "PACAYCASA",
+          "QUINUA",
+          "SAN_JOSE_DE_TICLLAS",
+          "SAN_JUAN_BAUTISTA",
+          "SANTIAGO_DE_PISCHA",
+          "SOCOS",
+          "TAMBILLO",
+          "VINCHOS",
+          "JESUS_NAZARENO",
+          "ANDRES_AVELINO_CACERES_DORREGARAY"
+        ],
+        "title": "DistritoAyacucho",
+        "description": "Distritos reales de la provincia de Huamanga, Ayacucho (ADR-018)."
       },
       "EstadoReabastecimiento": {
         "type": "string",
@@ -5391,6 +6295,17 @@
             "type": "string",
             "minLength": 1,
             "title": "Password"
+          },
+          "device_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Token"
           }
         },
         "type": "object",
@@ -5497,12 +6412,16 @@
             "type": "string",
             "minLength": 1,
             "title": "Direccion Destino"
+          },
+          "distrito": {
+            "$ref": "#/components/schemas/DistritoAyacucho"
           }
         },
         "type": "object",
         "required": [
           "empresa_encomienda",
-          "direccion_destino"
+          "direccion_destino",
+          "distrito"
         ],
         "title": "RegistrarEnvioRequest"
       },

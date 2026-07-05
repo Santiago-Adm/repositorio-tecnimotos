@@ -21,10 +21,12 @@ from api.auth_stores import (
     DocumentoRecord,
     UsuarioRecord,
     _hash_password,
+    _necesita_rehash,
     _verify_password,
 )
 from src.shared.infrastructure.models.usuario_model import DocumentoUsuarioModel, UsuarioModel
 from src.shared.infrastructure.models.usuario_eliminado_model import UsuarioEliminadoModel
+from src.shared.infrastructure.fernet import decrypt, encrypt, hash_email
 
 
 class UsuarioRepositoryPG:
@@ -36,16 +38,24 @@ class UsuarioRepositoryPG:
     # ── Lectura ──
 
     async def buscar_por_email(self, email: str) -> Optional[UsuarioRecord]:
-        stmt = select(UsuarioModel).where(UsuarioModel.email == email.lower())
+        stmt = select(UsuarioModel).where(UsuarioModel.email_hash == hash_email(email))
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return await self._to_record(model) if model else None
 
     async def verificar_credenciales(self, email: str, password: str) -> Optional[UsuarioRecord]:
-        user = await self.buscar_por_email(email)
-        if user and _verify_password(password, user.password_hash):
-            return user
-        return None
+        stmt = select(UsuarioModel).where(UsuarioModel.email_hash == hash_email(email))
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if not model or not _verify_password(password, model.password_hash):
+            return None
+        if _necesita_rehash(model.password_hash):
+            # Migración perezosa PBKDF2 → Argon2id (07 §2.1, hallazgo de la
+            # verificación profunda 2026-07-05) — nunca fuerza un reset de
+            # contraseña, solo re-hashea con el password ya verificado.
+            model.password_hash = _hash_password(password)
+            await self._session.flush()
+        return await self._to_record(model)
 
     async def obtener_por_id(self, uid: str) -> Optional[UsuarioRecord]:
         model = await self._session.get(UsuarioModel, uid)
@@ -81,7 +91,8 @@ class UsuarioRepositoryPG:
             raise ValueError(f"Email {email!r} ya registrado")
         model = UsuarioModel(
             id=str(uuid.uuid4()),
-            email=email.lower(),
+            email=encrypt(email.lower()),
+            email_hash=hash_email(email),
             nombre=nombre,
             rol=rol,
             password_hash=_hash_password(password),
@@ -99,7 +110,8 @@ class UsuarioRepositoryPG:
             raise ValueError(f"Email {email!r} ya registrado")
         model = UsuarioModel(
             id=str(uuid.uuid4()),
-            email=email.lower(),
+            email=encrypt(email.lower()),
+            email_hash=hash_email(email),
             nombre=nombre,
             rol="SUPERADMIN",
             password_hash=_hash_password(password),
@@ -117,17 +129,19 @@ class UsuarioRepositoryPG:
         rol: str,
         password: str,
         documentos: list[DocumentoRecord] | None = None,
+        estado_inicial: str = ESTADO_PENDIENTE,
     ) -> UsuarioRecord:
         existente = await self.buscar_por_email(email)
         if existente is not None:
             raise ValueError(f"Email {email!r} ya registrado")
         model = UsuarioModel(
             id=str(uuid.uuid4()),
-            email=email.lower(),
+            email=encrypt(email.lower()),
+            email_hash=hash_email(email),
             nombre=nombre,
             rol=rol,
             password_hash=_hash_password(password),
-            estado_cuenta=ESTADO_PENDIENTE,
+            estado_cuenta=estado_inicial,
             variante_tema=_default_variante_tema(rol),
         )
         self._session.add(model)
@@ -176,11 +190,12 @@ class UsuarioRepositoryPG:
         model = await self._session.get(UsuarioModel, usuario_id)
         if not model:
             return None
-        if email is not None and email.lower() != model.email:
+        if email is not None and hash_email(email) != model.email_hash:
             existente = await self.buscar_por_email(email)
             if existente is not None:
                 raise ValueError(f"Email {email!r} ya registrado")
-            model.email = email.lower()
+            model.email = encrypt(email.lower())
+            model.email_hash = hash_email(email)
         if nombre is not None:
             model.nombre = nombre
         if rol is not None:
@@ -272,7 +287,7 @@ class UsuarioRepositoryPG:
         ]
         return UsuarioRecord(
             usuario_id=model.id,
-            email=model.email,
+            email=decrypt(model.email),
             nombre=model.nombre,
             rol=model.rol,
             password_hash=model.password_hash,

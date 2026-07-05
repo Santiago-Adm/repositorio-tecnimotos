@@ -7,14 +7,19 @@ import { apiClient } from '@/src/lib/api-client'
 import { ApiCallError, Rol } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
+import SuperadminResumenTab from '@/src/components/dashboard/SuperadminResumenTab'
 import BiPanel from '@/src/components/dashboard/BiPanel'
 import UsuariosManager from '@/src/components/dashboard/UsuariosManager'
+import CatalogoConsultaTab from '@/src/components/dashboard/CatalogoConsultaTab'
+import StockConsultaTab from '@/src/components/dashboard/StockConsultaTab'
+import PedidosBandejaTab from '@/src/components/dashboard/PedidosBandejaTab'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
+import AppSidebarNav from '@/src/components/dashboard/AppSidebarNav'
 
-type Seccion = 'Panel BI' | 'Catálogo' | 'Categorías' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'
+type Seccion = 'Resumen' | 'Panel BI' | 'Catálogo' | 'Categorías' | 'Stock' | 'Pedidos' | 'Taller' | 'Admin' | 'Logs y config'
 
 // Mapeos visuales para roles
 const ROL_LABELS: Record<string, string> = {
@@ -96,7 +101,7 @@ export default function SuperadminDashboard() {
   const router = useRouter()
 
   // Navegación
-  const [seccion, setSeccion] = useState<Seccion>('Panel BI')
+  const [seccion, setSeccion] = useState<Seccion>('Resumen')
   const [adminTab, setAdminTab] = useState<'usuarios' | 'pendientes' | 'parametros'>('usuarios')
 
   // Sincronizar sección con URL query params para navegación y persistencia (evita pérdida de estado en refresco)
@@ -105,7 +110,7 @@ export default function SuperadminDashboard() {
       const params = new URLSearchParams(window.location.search)
       const secParam = params.get('seccion')
       const validSections: Array<Seccion> = [
-        'Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
+        'Resumen', 'Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'
       ]
       if (secParam === 'Logs') {
         setSeccion('Logs y config')
@@ -155,22 +160,6 @@ export default function SuperadminDashboard() {
   const [editingClave, setEditingClave] = useState<string | null>(null)
   const [editingValor, setEditingValor] = useState<string>('')
   const [savingParametro, setSavingParametro] = useState(false)
-
-  // Estados - Sección Catálogo
-  const [catalogoSearch, setCatalogoSearch] = useState('')
-  const [catalogoRepuestos, setCatalogoRepuestos] = useState<any[]>([])
-  const [loadingCatalogo, setLoadingCatalogo] = useState(false)
-  const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null)
-
-  // Estados - Sección Stock
-  const [stockItems, setStockItems] = useState<any[]>([])
-  const [loadingStock, setLoadingStock] = useState(false)
-  const [errorStock, setErrorStock] = useState<string | null>(null)
-
-  // Estados - Sección Pedidos
-  const [pedidosItems, setPedidosItems] = useState<any[]>([])
-  const [loadingPedidos, setLoadingPedidos] = useState(false)
-  const [errorPedidos, setErrorPedidos] = useState<string | null>(null)
 
   // Impersonación
   const [impersonationId, setImpersonationId] = useState('')
@@ -232,74 +221,16 @@ export default function SuperadminDashboard() {
     }
   }
 
-  // Carga de Catálogo
-  async function fetchCatalogo(e?: FormEvent) {
-    e?.preventDefault()
-    setLoadingCatalogo(true)
-    setErrorCatalogo(null)
-    try {
-      const query = catalogoSearch ? `&q=${encodeURIComponent(catalogoSearch)}` : ''
-      const data = await apiClient.get<{ repuestos: any[]; total: number }>(`/v1/repuestos?universo=mototaxi_3r${query}`)
-      setCatalogoRepuestos(data.repuestos ?? [])
-    } catch (err) {
-      setErrorCatalogo((err as ApiCallError).code)
-    } finally {
-      setLoadingCatalogo(false)
-    }
-  }
-
-  // Carga de Stock
-  async function fetchStock(silencioso = false) {
-    if (!silencioso) setLoadingStock(true)
-    setErrorStock(null)
-    try {
-      const data = await apiClient.get<{ stocks: any[]; total: number }>('/v1/stock')
-      setStockItems(data.stocks ?? [])
-    } catch (err) {
-      if (!silencioso) setErrorStock((err as ApiCallError).code)
-    } finally {
-      if (!silencioso) setLoadingStock(false)
-    }
-  }
-
-  // Carga de Pedidos
-  async function fetchPedidos() {
-    setLoadingPedidos(true)
-    setErrorPedidos(null)
-    try {
-      const data = await apiClient.get<{ pedidos: any[]; total: number }>('/v1/pedidos')
-      setPedidosItems(data.pedidos ?? [])
-    } catch (err) {
-      setErrorPedidos((err as ApiCallError).code)
-    } finally {
-      setLoadingPedidos(false)
-    }
-  }
-
   // Efecto desencadenado al cambiar de Sección
   useEffect(() => {
     if (seccion === 'Admin') {
       if (adminTab === 'pendientes') fetchPendientes()
       if (adminTab === 'parametros') fetchParametros()
-    } else if (seccion === 'Catálogo') {
-      fetchCatalogo()
-    } else if (seccion === 'Stock') {
-      fetchStock()
-    } else if (seccion === 'Pedidos') {
-      fetchPedidos()
     } else if (seccion === 'Logs y config') {
       fetchMetrics()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion, adminTab])
-
-  // Polling de Stock — refresco silencioso cada 30s mientras la sección está activa
-  useEffect(() => {
-    if (seccion !== 'Stock') return
-    const intervalo = setInterval(() => fetchStock(true), 30000)
-    return () => clearInterval(intervalo)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seccion])
 
   // Aprobación de cuenta
   async function handleAprobar(userId: string) {
@@ -392,46 +323,21 @@ export default function SuperadminDashboard() {
       />
 
       <div className="flex flex-col md:flex-row">
-        {/* MOBILE SECTION SELECTOR */}
-        <div className="md:hidden p-6 pb-0">
-          <label htmlFor="mobile-section-select" className="block text-xs text-slate-500 font-body mb-1">
-            Sección actual:
-          </label>
-          <select
-            id="mobile-section-select"
-            value={seccion}
-            onChange={e => handleSetSeccion(e.target.value as any)}
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-semibold font-body focus:outline-none focus:ring-2 focus:ring-teal"
-          >
-            {(['Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* SIDEBAR NAVIGATION */}
-        <nav className="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1.5 bg-slate-900/40">
-          {(['Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => handleSetSeccion(m)}
-              className={`text-left px-3 py-2 rounded-lg text-sm font-body transition-all duration-200 ${
-                seccion === m
-                  ? 'bg-teal/15 text-teal font-semibold border-l-4 border-teal'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </nav>
+        {/* Navegación (Pieza F: sidebar+drawer compartido, reemplaza el
+            <select> de respaldo mobile y el <nav> hidden md:flex previos) */}
+        <AppSidebarNav
+          secciones={['Resumen', 'Panel BI', 'Catálogo', 'Categorías', 'Stock', 'Pedidos', 'Taller', 'Admin', 'Logs y config']}
+          activa={seccion}
+          onSeleccionar={s => handleSetSeccion(s as Seccion)}
+        />
 
         {/* CONTENEDOR PRINCIPAL */}
-        <main className="flex-1 p-6 space-y-6 max-w-7xl">
+        <main className="flex-1 min-w-0 p-6 space-y-6 max-w-7xl">
 
-          {/* 0. SECCIÓN: PANEL BI (ADR-015 — filtros premium, mismo nivel que ADMINISTRADOR) */}
+          {/* 0. SECCIÓN: RESUMEN (Referencia 1 — sesión dashboards deterministas) */}
+          {seccion === 'Resumen' && <SuperadminResumenTab />}
+
+          {/* 0.1 SECCIÓN: PANEL BI (ADR-015 — filtros premium, mismo nivel que ADMINISTRADOR) */}
           {seccion === 'Panel BI' && <BiPanel />}
 
           {/* 1. SECCIÓN: LOGS Y CONFIG (Métricas y Estado) */}
@@ -798,174 +704,15 @@ export default function SuperadminDashboard() {
           )}
 
           {/* 3. SECCIÓN: CATÁLOGO (Consulta) */}
-          {seccion === 'Catálogo' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold text-slate-100">Catálogo de Repuestos</h1>
-                <p className="text-sm text-slate-400 font-body">Consulta y verificación de repuestos.</p>
-              </div>
-
-              <form onSubmit={fetchCatalogo} className="flex gap-2 max-w-lg">
-                <input
-                  type="search"
-                  placeholder="Código o nombre del repuesto..."
-                  value={catalogoSearch}
-                  onChange={e => setCatalogoSearch(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold hover:bg-teal/95 transition-colors font-body"
-                >
-                  Buscar
-                </button>
-              </form>
-
-              {loadingCatalogo ? (
-                <LoadingIndicator message="Buscando repuestos..." />
-              ) : errorCatalogo ? (
-                <ErrorDisplay code={errorCatalogo} onRetry={() => fetchCatalogo()} />
-              ) : catalogoRepuestos.length === 0 ? (
-                <EmptyState title="Catálogo vacío" description="Utiliza el buscador para encontrar repuestos de mototaxis." />
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {catalogoRepuestos.map(r => (
-                    <div key={r.codigo} className="rounded-xl bg-slate-800 border border-slate-700 p-4 space-y-3">
-                      <div>
-                        <p className="text-xs text-slate-500 font-mono">{r.codigo}</p>
-                        <h3 className="text-sm font-semibold text-slate-100 truncate">{r.nombre}</h3>
-                        <p className="text-xs text-slate-400 font-body mt-1">
-                          Categoría: <span className="font-semibold text-slate-300">{r.categoria?.replace(/_/g, ' ') || 'Sin categoría'}</span>
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-slate-750 pt-2">
-                        <span className="text-xs text-slate-500 font-body">Precio Venta:</span>
-                        <span className="text-sm font-mono text-teal font-semibold">S/ {r.precio_venta?.toFixed(2) || '0.00'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {seccion === 'Catálogo' && <CatalogoConsultaTab />}
 
           {seccion === 'Categorías' && <CategoriasManager />}
 
           {/* 4. SECCIÓN: STOCK */}
-          {seccion === 'Stock' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold text-slate-100">Control de Stock</h1>
-                <p className="text-sm text-slate-400 font-body">Estado actual de inventario y alertas por debajo del umbral.</p>
-              </div>
-
-              {loadingStock ? (
-                <LoadingIndicator message="Cargando existencias..." />
-              ) : errorStock ? (
-                <ErrorDisplay code={errorStock} onRetry={fetchStock} />
-              ) : stockItems.length === 0 ? (
-                <EmptyState title="Sin registros de stock" description="Registra repuestos en el catálogo para ver niveles de stock." />
-              ) : (
-                <div className="space-y-6">
-                  {/* Alertas */}
-                  {stockItems.some(s => s.esta_bajo_umbral) && (
-                    <div className="space-y-2">
-                      <h2 className="text-sm font-semibold text-red-400 font-body">Alertas Críticas de Stock</h2>
-                      <div className="rounded-xl border border-red-500/25 bg-red-950/5 overflow-hidden divide-y divide-slate-800">
-                        {stockItems.filter(s => s.esta_bajo_umbral).map(s => (
-                          <div key={s.codigo} className="flex justify-between items-center px-4 py-3">
-                            <span className="font-mono text-sm text-slate-200">{s.codigo}</span>
-                            <div className="text-right">
-                              <span className="text-sm font-mono text-red-400 font-semibold">{s.cantidad_disponible} unidades</span>
-                              <p className="text-[10px] text-slate-500 font-body">mínimo: {s.umbral_minimo}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tabla General */}
-                  <div className="space-y-2">
-                    <h2 className="text-sm font-semibold text-slate-300 font-body">Inventario General</h2>
-                    <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-855">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead className="bg-slate-800 text-slate-400 font-body border-b border-slate-800">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold">Código</th>
-                            <th className="px-4 py-3 font-semibold text-right">Disponible</th>
-                            <th className="px-4 py-3 font-semibold text-right">Apartada</th>
-                            <th className="px-4 py-3 font-semibold text-right">Umbral Mínimo</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                          {stockItems.map(s => (
-                            <tr key={s.codigo} className={`hover:bg-slate-800/30 ${s.esta_bajo_umbral ? 'bg-red-500/5' : ''}`}>
-                              <td className="px-4 py-2.5 font-mono text-slate-200">{s.codigo}</td>
-                              <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-200">{s.cantidad_disponible}</td>
-                              <td className="px-4 py-2.5 text-right font-mono text-slate-400">{s.cantidad_apartada}</td>
-                              <td className="px-4 py-2.5 text-right font-mono text-slate-400">{s.umbral_minimo}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {seccion === 'Stock' && <StockConsultaTab />}
 
           {/* 5. SECCIÓN: PEDIDOS */}
-          {seccion === 'Pedidos' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold text-slate-100">Bandeja de Pedidos</h1>
-                <p className="text-sm text-slate-400 font-body">Monitoreo de pedidos y transiciones de compra.</p>
-              </div>
-
-              {loadingPedidos ? (
-                <LoadingIndicator message="Recuperando pedidos..." />
-              ) : errorPedidos ? (
-                <ErrorDisplay code={errorPedidos} onRetry={fetchPedidos} />
-              ) : pedidosItems.length === 0 ? (
-                <EmptyState title="Sin pedidos" description="No hay pedidos registrados en el sistema." />
-              ) : (
-                <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-855">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-800 text-slate-400 font-body border-b border-slate-800">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">ID Pedido</th>
-                        <th className="px-4 py-3 font-semibold">Canal</th>
-                        <th className="px-4 py-3 font-semibold">Estado</th>
-                        <th className="px-4 py-3 font-semibold text-right">Monto Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {pedidosItems.map(p => (
-                        <tr key={p.pedido_id} className="hover:bg-slate-800/40">
-                          <td className="px-4 py-2.5 font-mono text-slate-200">{p.pedido_id}</td>
-                          <td className="px-4 py-2.5 text-slate-400 uppercase font-mono text-[10px]">{p.canal_origen || '-'}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-body ${
-                              p.estado === 'CONFIRMADO' ? 'bg-teal/20 text-teal' :
-                              p.estado === 'BORRADOR' ? 'bg-slate-700 text-slate-400' :
-                              'bg-electric/20 text-electric'
-                            }`}>
-                              {p.estado?.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-200">
-                            {p.monto_total != null ? `S/ ${p.monto_total.toFixed(2)}` : 'En revisión'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {seccion === 'Pedidos' && <PedidosBandejaTab />}
 
           {/* 6. SECCIÓN: TALLER */}
           {seccion === 'Taller' && (
@@ -975,7 +722,7 @@ export default function SuperadminDashboard() {
                 <p className="text-sm text-slate-400 font-body">Supervisión del estado de las ordenes de trabajo.</p>
               </div>
 
-              <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
+              <section className="rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-900/60 border border-slate-800/60 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.3)] p-8 text-center">
                 <p className="text-slate-400 font-body text-sm">
                   Módulo de Taller — disponible próximamente para visualización masiva.
                 </p>

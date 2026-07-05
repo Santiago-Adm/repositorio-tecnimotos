@@ -24,10 +24,13 @@ from api.auth_stores import (
     ESTADO_PENDIENTE,
     ROLES_MFA_CORREO_REQUERIDO,
     DocumentoRecord,
+    idle_window_para_rol,
 )
 from api.dependencies import error_response, get_request_id, success_response
 from src.shared.infrastructure.email_sender import EmailSendError, enviar_correo
+from src.shared.infrastructure.email_templates import plantilla_codigo_mfa
 from src.shared.infrastructure.mfa_auditoria import registrar_intento_mfa
+from src.shared.infrastructure.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +38,6 @@ router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 _TOTP_PATTERN = re.compile(r"^[0-9]{6}$")
 _REFRESH_COOKIE = "refresh_token"
-_REFRESH_MAX_AGE = 7 * 24 * 3600  # 7 días en segundos — 07 §2.1
 
 
 def _get_user_store(request: Request):
@@ -64,6 +66,9 @@ def _get_private_key(request: Request) -> str | None:
 class LoginRequest(BaseModel):
     email: str = Field(min_length=1)
     password: str = Field(min_length=1)
+    # Pieza 6-bis: token de dispositivo ya verificado por MFA una vez (ver
+    # dispositivo_confiable) — si coincide, se salta el paso de MFA.
+    device_token: str | None = Field(default=None)
 
 
 class MfaRequest(BaseModel):
@@ -78,23 +83,135 @@ class BootstrapSuperadminRequest(BaseModel):
     bootstrap_key: str = Field(min_length=1)
 
 
+def _ip_cliente(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+# ── Bloqueo de fuerza bruta en login por IP (07 §2.5) ────────────────────────
+# Hallazgo real de la verificación profunda (2026-07-05): estaba documentado
+# ("bloqueo 15 min tras 10 intentos fallidos/IP") pero nunca implementado —
+# solo existía el rate-limiter genérico por volumen de requests. Redis ya
+# corría en el stack sin ningún uso funcional hasta esta pieza.
+LOGIN_FALLOS_MAX = 10          # umbral exacto de 07 §2.5 — no 5
+LOGIN_FALLOS_VENTANA_SEG = 60
+LOGIN_BLOQUEO_MINUTOS = 15
+
+
+def _get_redis(request: Request):
+    return getattr(request.app.state, "redis", None)
+
+
+async def _ip_bloqueada_por_fuerza_bruta(request: Request) -> bool:
+    redis_client = _get_redis(request)
+    ip = _ip_cliente(request)
+    if redis_client is None or not ip:
+        return False
+    return bool(await redis_client.exists(f"login_bloqueo:{ip}"))
+
+
+async def _registrar_fallo_login(request: Request) -> None:
+    redis_client = _get_redis(request)
+    ip = _ip_cliente(request)
+    if redis_client is None or not ip:
+        return
+    clave = f"login_fallos:{ip}"
+    fallos = await redis_client.incr(clave)
+    if fallos == 1:
+        await redis_client.expire(clave, LOGIN_FALLOS_VENTANA_SEG)
+    if fallos >= LOGIN_FALLOS_MAX:
+        await redis_client.set(f"login_bloqueo:{ip}", "1", ex=LOGIN_BLOQUEO_MINUTOS * 60)
+        logger.warning(
+            "login: IP bloqueada por fuerza bruta — ALERTA — revisar de inmediato",
+            extra={"ip": ip, "fallos": fallos, "bloqueo_minutos": LOGIN_BLOQUEO_MINUTOS},
+        )
+
+
+def _superadmin_ip_autorizada(request: Request) -> bool:
+    """Pieza 6-bis: SUPERADMIN solo conecta desde IPs fijas de Tailscale
+    (SUPERADMIN_ALLOWED_IPS). Fail-safe idéntico al de email_sender.py:
+    comparación estricta == "production" — cualquier otro valor de
+    ENVIRONMENT (incluido ausente o mal escrito) nunca bloquea, porque solo
+    Railway/producción real debe declarar ENVIRONMENT=production."""
+    settings = get_settings()
+    if settings.environment != "production":
+        return True
+    allowed = {ip.strip() for ip in settings.superadmin_allowed_ips.split(",") if ip.strip()}
+    if not allowed:
+        # Sin lista configurada en producción — fail-closed, no fail-open,
+        # para un rol de máximo privilegio.
+        return False
+    return _ip_cliente(request) in allowed
+
+
+async def _emitir_tokens_sesion(
+    request: Request, response: Response, user, session_store,
+) -> dict[str, Any]:
+    """Emite access_token + refresh_token (cookie) + device_token nuevo.
+    Compartido por el paso normal de MFA y por el atajo de dispositivo
+    confiable en login() (Pieza 6-bis)."""
+    private_key = _get_private_key(request)
+    if not private_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(
+                "ERROR_INTERNO", "Clave privada JWT no configurada",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    access_token = issue_access_token(private_key, user.usuario_id, user.rol, user.token_version)
+    idle_window = idle_window_para_rol(user.rol)
+    _session_id, refresh_raw = await session_store.crear_sesion(user.usuario_id, idle_window_minutos=idle_window)
+    device_token = await session_store.crear_dispositivo_confiable(user.usuario_id)
+
+    response.set_cookie(
+        key=_REFRESH_COOKIE,
+        value=refresh_raw,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=idle_window * 60,
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "variante_tema": user.variante_tema,
+        "device_token": device_token,
+    }
+
+
 # ── EP-AUTH-01 — Login ────────────────────────────────────────────────────────
 
 @router.post(
     "/login",
     summary="EP-AUTH-01: Login con credenciales",
 )
-async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
+async def login(request: Request, body: LoginRequest, response: Response) -> dict[str, Any]:
     """
     Público — sin token.
     Bloqueo 15 min tras 10 intentos fallidos/IP (07 §2.5).
     InMemory: rate limiting simplificado.
+    Pieza 6-bis: si body.device_token coincide con un dispositivo ya
+    verificado por MFA antes, se saltan mfa_session/EP-AUTH-02 por completo
+    y se emiten los tokens de una — "mismo dispositivo, solo contraseña".
     """
     user_store = _get_user_store(request)
     session_store = _get_session_store(request)
 
+    if await _ip_bloqueada_por_fuerza_bruta(request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(
+                "DEMASIADOS_INTENTOS",
+                "Demasiados intentos fallidos desde esta red. Intenta de nuevo en unos minutos.",
+                request_id=get_request_id(request),
+            ),
+        )
+
     user = await user_store.verificar_credenciales(body.email, body.password)
     if not user or not user.activo:
+        await _registrar_fallo_login(request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error_response(
@@ -127,6 +244,28 @@ async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
             ),
         )
 
+    # Pieza 6-bis: SUPERADMIN solo desde IP de Tailscale autorizada (producción).
+    if user.rol == "SUPERADMIN" and not _superadmin_ip_autorizada(request):
+        logger.warning(
+            "login: SUPERADMIN desde IP no autorizada",
+            extra={"usuario_id": user.usuario_id, "ip": _ip_cliente(request), "request_id": get_request_id(request)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(
+                "RED_NO_AUTORIZADA",
+                "SUPERADMIN solo puede conectarse desde la red autorizada.",
+                request_id=get_request_id(request),
+            ),
+        )
+
+    # Pieza 6-bis: mismo dispositivo ya verificado por MFA → saltar EP-AUTH-02.
+    if await session_store.verificar_dispositivo(user.usuario_id, body.device_token):
+        return success_response(
+            await _emitir_tokens_sesion(request, response, user, session_store),
+            request_id=get_request_id(request),
+        )
+
     requiere_codigo_real = user.rol in ROLES_MFA_CORREO_REQUERIDO
     mfa_token, codigo_claro = await session_store.crear_mfa_session(
         user.usuario_id, requiere_codigo_real=requiere_codigo_real
@@ -140,6 +279,7 @@ async def login(request: Request, body: LoginRequest) -> dict[str, Any]:
                 f"Tu código de verificación es: {codigo_claro}\n"
                 f"Expira en {session_store.MFA_TTL_MINUTES} minutos. "
                 "Si no fuiste tú, ignora este correo.",
+                cuerpo_html=plantilla_codigo_mfa(codigo_claro, session_store.MFA_TTL_MINUTES),
             )
         except EmailSendError:
             logger.exception(
@@ -169,7 +309,6 @@ async def mfa(request: Request, body: MfaRequest, response: Response) -> dict[st
     """
     session_store = _get_session_store(request)
     user_store = _get_user_store(request)
-    private_key = _get_private_key(request)
 
     # Bloqueo cross-sesión (ADR-011/ADR-014) — chequeo previo: un mfa_session_token
     # emitido justo antes de que el usuario quedara bloqueado en otra sesión no
@@ -213,33 +352,8 @@ async def mfa(request: Request, body: MfaRequest, response: Response) -> dict[st
             ),
         )
 
-    if not private_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error_response(
-                "ERROR_INTERNO", "Clave privada JWT no configurada",
-                request_id=get_request_id(request),
-            ),
-        )
-
-    access_token = issue_access_token(private_key, user.usuario_id, user.rol, user.token_version)
-    _session_id, refresh_raw = await session_store.crear_sesion(user.usuario_id)
-
-    response.set_cookie(
-        key=_REFRESH_COOKIE,
-        value=refresh_raw,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=_REFRESH_MAX_AGE,
-    )
-
     return success_response(
-        {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "variante_tema": user.variante_tema,
-        },
+        await _emitir_tokens_sesion(request, response, user, session_store),
         request_id=get_request_id(request),
     )
 
@@ -295,13 +409,16 @@ async def refresh(
 
     access_token = issue_access_token(private_key, user.usuario_id, user.rol, user.token_version)
 
+    # Sesión deslizante (Pieza 6-bis): la cookie dura lo mismo que la ventana
+    # de inactividad del rol — rotar_refresh ya extendió expira_en en el
+    # backend, así que mientras haya actividad ambas se siguen renovando.
     response.set_cookie(
         key=_REFRESH_COOKIE,
         value=nuevo_refresh,
         httponly=True,
         secure=True,
         samesite="strict",
-        max_age=_REFRESH_MAX_AGE,
+        max_age=idle_window_para_rol(user.rol) * 60,
     )
 
     return success_response(

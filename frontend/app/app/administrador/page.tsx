@@ -8,11 +8,14 @@ import { ApiCallError } from '@/src/lib/types'
 import DashboardHeader from '@/src/components/dashboard/DashboardHeader'
 import CategoriasManager from '@/src/components/dashboard/CategoriasManager'
 import BiPanel from '@/src/components/dashboard/BiPanel'
+import AdministradorResumenTab from '@/src/components/dashboard/AdministradorResumenTab'
+import CatalogoAdminTab from '@/src/components/dashboard/CatalogoAdminTab'
 import UsuariosManager from '@/src/components/dashboard/UsuariosManager'
-import LoadingIndicator from '@/src/components/LoadingIndicator'
-import ErrorDisplay from '@/src/components/ErrorDisplay'
-import EmptyState from '@/src/components/EmptyState'
+import AppSidebarNav from '@/src/components/dashboard/AppSidebarNav'
+import CatalogoNavegable, { StockInfo } from '@/src/components/dashboard/CatalogoNavegable'
+import EditarStockModal from '@/src/components/dashboard/EditarStockModal'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
+import { RepuestoListItem } from '@/src/lib/types'
 
 interface StockItem {
   repuesto_id: string
@@ -29,15 +32,17 @@ interface StockResponse {
   total: number
 }
 
-type Seccion = 'Panel BI' | 'Stock' | 'Catálogo' | 'Categorías' | 'Pedidos' | 'Taller' | 'Admin'
+type Seccion = 'Resumen' | 'Panel BI' | 'Stock' | 'Catálogo' | 'Categorías' | 'Pedidos' | 'Taller' | 'Admin'
 
 export default function AdministradorDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
-  const [seccion, setSeccion] = useState<Seccion>('Panel BI')
+  const [seccion, setSeccion] = useState<Seccion>('Resumen')
   const [stock, setStock] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editandoStock, setEditandoStock] = useState<{ repuesto: RepuestoListItem; stock: StockInfo | null } | null>(null)
+  const [versionStock, setVersionStock] = useState(0)
 
   function fetchStock(silencioso = false) {
     if (!silencioso) setLoading(true)
@@ -64,32 +69,28 @@ export default function AdministradorDashboard() {
       <SessionExpiredHandler rol="ADMINISTRADOR" />
       <DashboardHeader userId={user.id} rol="ADMINISTRADOR" onLogout={logout} />
 
-      <div className="flex">
-        {/* Navegación — 02 §4.1 ADMINISTRADOR */}
-        <nav className="hidden md:flex flex-col w-48 shrink-0 border-r border-slate-800 min-h-[calc(100vh-56px)] p-4 gap-1">
-          {(['Panel BI', 'Stock', 'Catálogo', 'Categorías', 'Pedidos', 'Taller', 'Admin'] as Seccion[]).map(m => (
-            <button
-              key={m}
-              onClick={() => setSeccion(m)}
-              className={`text-left px-3 py-2 rounded-lg text-sm font-body transition-colors ${
-                seccion === m ? 'text-teal bg-teal/10' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </nav>
+      <div className="flex flex-col md:flex-row">
+        {/* Navegación — 02 §4.1 ADMINISTRADOR (Pieza F: sidebar+drawer compartido) */}
+        <AppSidebarNav
+          secciones={['Resumen', 'Panel BI', 'Stock', 'Catálogo', 'Categorías', 'Pedidos', 'Taller', 'Admin']}
+          activa={seccion}
+          onSeleccionar={s => setSeccion(s as Seccion)}
+        />
 
-        <main className="flex-1 p-6 space-y-6">
-          {seccion !== 'Stock' && seccion !== 'Categorías' && seccion !== 'Panel BI' && seccion !== 'Admin' && (
-            <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
+        <main className="flex-1 min-w-0 p-6 space-y-6">
+          {seccion !== 'Stock' && seccion !== 'Categorías' && seccion !== 'Panel BI' && seccion !== 'Admin' && seccion !== 'Resumen' && seccion !== 'Catálogo' && (
+            <section className="rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-900/60 border border-slate-800/60 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.3)] p-8 text-center">
               <p className="text-slate-400 font-body text-sm">
                 Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
               </p>
             </section>
           )}
 
+          {seccion === 'Resumen' && <AdministradorResumenTab />}
+
           {seccion === 'Panel BI' && <BiPanel />}
+
+          {seccion === 'Catálogo' && <CatalogoAdminTab />}
 
           {seccion === 'Categorías' && <CategoriasManager />}
 
@@ -102,7 +103,13 @@ export default function AdministradorDashboard() {
 
           {seccion === 'Stock' && alertas.length > 0 && (
             <section>
-              <h2 className="font-display text-base font-semibold text-electric mb-3">
+              <h2 className="font-display text-base font-semibold text-electric mb-3 flex items-center gap-2">
+                {/* MASTER.md — patrón Real-Time Monitoring del Skill: la
+                    alerta se percibe viva, no un dato estático más. */}
+                <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-electric opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-electric" />
+                </span>
                 Alertas de stock ({alertas.length})
               </h2>
               <div className="rounded-xl border border-electric/30 bg-electric/5 divide-y divide-slate-800">
@@ -122,39 +129,27 @@ export default function AdministradorDashboard() {
           {seccion === 'Stock' && <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold text-slate-100">Stock general</h2>
-              <button onClick={() => fetchStock()} className="text-xs text-teal font-body hover:underline">Actualizar</button>
             </div>
-            {loading ? (
-              <LoadingIndicator message="Cargando stock..." />
-            ) : error ? (
-              <ErrorDisplay code={error} onRetry={() => fetchStock()} />
-            ) : stock.length === 0 ? (
-              <EmptyState title="No hay stock registrado" description="Cuando se registren repuestos en el catálogo, aparecerán aquí." />
-            ) : (
-              <div className="rounded-xl border border-slate-800 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-800/60">
-                    <tr>
-                      <th className="text-left px-4 py-2 text-xs text-slate-400 font-body">Código</th>
-                      <th className="text-right px-4 py-2 text-xs text-slate-400 font-body">Disponible</th>
-                      <th className="text-right px-4 py-2 text-xs text-slate-400 font-body">Mínimo</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {stock.map(s => (
-                      <tr key={s.codigo} className={s.esta_bajo_umbral ? 'bg-electric/5' : ''}>
-                        <td className="px-4 py-2 font-mono text-slate-200">{s.codigo}</td>
-                        <td className="px-4 py-2 text-right font-mono text-slate-200">{s.cantidad_disponible}</td>
-                        <td className="px-4 py-2 text-right font-mono text-slate-400">{s.umbral_minimo}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {/* Pieza 2 — antes tabla plana con los 16 195 repuestos sin
+                filtrar; ahora reutiliza la navegación universo→modelo→
+                categoría de Catálogo, consultando stock solo de lo visible. */}
+            <CatalogoNavegable
+              key={versionStock}
+              modoStock
+              onEditarStock={(repuesto, stockInfo) => setEditandoStock({ repuesto, stock: stockInfo })}
+            />
           </section>}
 
-          <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-5">
+          {editandoStock && (
+            <EditarStockModal
+              repuesto={editandoStock.repuesto}
+              stock={editandoStock.stock}
+              onCerrar={() => setEditandoStock(null)}
+              onGuardado={() => { setEditandoStock(null); setVersionStock(v => v + 1) }}
+            />
+          )}
+
+          <section className="rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-900/60 border border-slate-800/60 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.3)] p-5">
             <h3 className="font-display text-sm font-semibold text-slate-300 mb-2">Cómo funciona</h3>
             <p className="text-sm text-slate-400 font-body">
               El sistema informa, tú decides. Cuando un repuesto cae bajo su umbral mínimo, aparece

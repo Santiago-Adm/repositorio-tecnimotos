@@ -30,6 +30,11 @@ class _UsuarioSeed:
     password: str
     segmento: str | None = None   # SegmentoCliente — solo CLIENTE_*
     nivel_mecanico: str | None = None  # "MASTER" | "JUNIOR" — solo MECANICO_*
+    # S3/S5 (FLOTA_DUENO/FLOTA_CONDUCTOR/MOTOLINEAL) no están activos en el MVP
+    # (01 §Segmentos) — la cuenta se siembra pero nace en EN_REVISION, bloqueada
+    # en login hasta que ADMINISTRADOR/SUPERADMIN la apruebe explícitamente vía
+    # EP-ADM-07 (mismo flujo real de "Cuentas Pendientes", sin código nuevo).
+    pendiente_habilitacion: bool = False
 
 
 # (rol, email, password) — debe coincidir exactamente con levantar-sistema.md.
@@ -41,9 +46,9 @@ USUARIOS_DEV: list[_UsuarioSeed] = [
     _UsuarioSeed("conductor@tecnimotos.test", "Conductor Seed", "CLIENTE_CONDUCTOR", "conductor123", segmento="CLIENTE_CONDUCTOR"),
     _UsuarioSeed("distrito@tecnimotos.test", "Distrito Seed", "CLIENTE_DISTRITO", "distrito123", segmento="CLIENTE_DISTRITO"),
     _UsuarioSeed("rural@tecnimotos.test", "Rural Seed", "CLIENTE_RURAL", "rural123", segmento="CLIENTE_RURAL"),
-    _UsuarioSeed("flota.dueno@tecnimotos.test", "Flota Dueno Seed", "CLIENTE_FLOTA_DUENO", "flotadueno123", segmento="CLIENTE_FLOTA_DUENO"),
-    _UsuarioSeed("flota.conductor@tecnimotos.test", "Flota Conductor Seed", "CLIENTE_FLOTA_CONDUCTOR", "flotaconductor123", segmento="CLIENTE_FLOTA_CONDUCTOR"),
-    _UsuarioSeed("motolineal@tecnimotos.test", "Motolineal Seed", "CLIENTE_MOTOLINEAL", "motolineal123", segmento="CLIENTE_MOTOLINEAL"),
+    _UsuarioSeed("flota.dueno@tecnimotos.test", "Flota Dueno Seed", "CLIENTE_FLOTA_DUENO", "flotadueno123", segmento="CLIENTE_FLOTA_DUENO", pendiente_habilitacion=True),
+    _UsuarioSeed("flota.conductor@tecnimotos.test", "Flota Conductor Seed", "CLIENTE_FLOTA_CONDUCTOR", "flotaconductor123", segmento="CLIENTE_FLOTA_CONDUCTOR", pendiente_habilitacion=True),
+    _UsuarioSeed("motolineal@tecnimotos.test", "Motolineal Seed", "CLIENTE_MOTOLINEAL", "motolineal123", segmento="CLIENTE_MOTOLINEAL", pendiente_habilitacion=True),
 ]
 
 # SUPERADMIN aparte: no se crea vía crear_usuario (reservado para el flujo de
@@ -55,6 +60,7 @@ SUPERADMIN_SEED = _UsuarioSeed("superadmin@tecnimotos.test", "Superadmin Seed", 
 
 
 async def seed_usuarios_dev_pg(session_factory: async_sessionmaker) -> None:
+    from api.auth_stores import ESTADO_EN_REVISION
     from src.pedidos.infrastructure.repositories.models.pedido_models import ClienteModel
     from src.taller.infrastructure.repositories.models.taller_models import MecanicoModel
     from src.shared.infrastructure.repositories.usuario_repository_pg import UsuarioRepositoryPG
@@ -75,9 +81,15 @@ async def seed_usuarios_dev_pg(session_factory: async_sessionmaker) -> None:
                 existente = await repo.buscar_por_email(seed.email)
                 if existente is not None:
                     continue
-                user = await repo.crear_usuario(
-                    email=seed.email, nombre=seed.nombre, rol=seed.rol, password=seed.password,
-                )
+                if seed.pendiente_habilitacion:
+                    user = await repo.crear_cuenta_pendiente(
+                        email=seed.email, nombre=seed.nombre, rol=seed.rol, password=seed.password,
+                        estado_inicial=ESTADO_EN_REVISION,
+                    )
+                else:
+                    user = await repo.crear_usuario(
+                        email=seed.email, nombre=seed.nombre, rol=seed.rol, password=seed.password,
+                    )
                 if seed.segmento:
                     session.add(ClienteModel(usuario_id=user.usuario_id, segmento=seed.segmento))
                 if seed.nivel_mecanico:

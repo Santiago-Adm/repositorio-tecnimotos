@@ -35,6 +35,19 @@ async def taller_repo(pg_session):
 
 
 class TestUsuarioRepositoryPGGestion:
+    async def test_crear_cuenta_pendiente_con_estado_inicial_explicito(self, usuario_repo):
+        # S3/S5 (FLOTA_DUENO/FLOTA_CONDUCTOR/MOTOLINEAL): la cuenta nace en
+        # EN_REVISION, no en ACTIVO — bloqueada en login hasta aprobación real.
+        from api.auth_stores import ESTADO_EN_REVISION
+        user = await usuario_repo.crear_cuenta_pendiente(
+            email="adr-flota-pg@test.com", nombre="Flota Dueno PG", rol="CLIENTE_FLOTA_DUENO",
+            password="pass12345", estado_inicial=ESTADO_EN_REVISION,
+        )
+        assert user.estado_cuenta == ESTADO_EN_REVISION
+
+        recargado = await usuario_repo.obtener_por_id(user.usuario_id)
+        assert recargado.estado_cuenta == ESTADO_EN_REVISION
+
     async def test_actualizar_usuario_nombre_email_rol(self, usuario_repo):
         user = await usuario_repo.crear_usuario(
             email="adr016-edit@test.com", nombre="Original", rol="VENDEDOR", password="pass12345",

@@ -18,12 +18,16 @@ class EmailSendError(Exception):
     pass
 
 
-async def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str) -> None:
+async def enviar_correo(
+    destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str | None = None,
+) -> None:
     """
     Envía un correo transaccional. Si RESEND_API_KEY no está configurada
     (dev/test sin credenciales), registra un log y no falla — mismo patrón
     de degradación que R2ImagenStorage/InMemoryImagenStorage.
     Nunca loguea el cuerpo del correo (puede contener el código MFA).
+    cuerpo_html es opcional — si se omite, Resend envía solo texto plano
+    (mismo comportamiento de antes de la Pieza 6-bis de diseño de correos).
     """
     settings = get_settings()
     destinatario_parcial = destinatario[:3] + "***"
@@ -52,16 +56,20 @@ async def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str) -> No
             )
         return
 
+    payload: dict[str, object] = {
+        "from": settings.mfa_email_from,
+        "to": [destinatario],
+        "subject": asunto,
+        "text": cuerpo_texto,
+    }
+    if cuerpo_html:
+        payload["html"] = cuerpo_html
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": settings.mfa_email_from,
-                "to": [destinatario],
-                "subject": asunto,
-                "text": cuerpo_texto,
-            },
+            json=payload,
         )
 
     if response.status_code >= 400:

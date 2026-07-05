@@ -5,10 +5,23 @@ import { ApiCallError } from './types'
 // Rutas relativas — Next.js reescribe /v1/* → backend (ver next.config.mjs)
 const API_BASE = ''
 const TOKEN_KEY = 'tm_access_token'
+const DEVICE_TOKEN_KEY = 'tm_device_token'
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem(TOKEN_KEY)
+}
+
+// Pieza 6-bis: token de "dispositivo confiable" — si el backend lo reconoce
+// en el próximo login, se salta el paso de MFA (mismo dispositivo, sin
+// relación con el token de acceso ni con la cookie de refresh).
+export function getDeviceToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(DEVICE_TOKEN_KEY)
+}
+
+export function setDeviceToken(token: string): void {
+  localStorage.setItem(DEVICE_TOKEN_KEY, token)
 }
 
 export function setStoredToken(token: string): void {

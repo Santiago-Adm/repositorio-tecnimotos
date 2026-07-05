@@ -24,6 +24,7 @@ from src.taller.domain.models.orden_trabajo import (
     NivelMecanico,
     NivelUrgencia,
     OrdenTrabajo,
+    OrdenTrabajoEvento,
     Vehiculo,
 )
 from src.taller.infrastructure.repositories.taller_repository_pg import TallerRepositoryPG
@@ -40,14 +41,16 @@ async def usuario_id(pg_session) -> str:
     """Crea un usuario mínimo en BD para satisfacer FK de mecanico."""
     import hashlib
     import os
+    from src.shared.infrastructure.fernet import encrypt, hash_email
     uid = str(uuid.uuid4())
     salt = os.urandom(16)
     h = hashlib.pbkdf2_hmac("sha256", b"test", salt, 100_000)
     pw_hash = salt.hex() + ":" + h.hex()
+    email = f"mec-{uid[:8]}@test.test"
     await pg_session.execute(text(
-        "INSERT INTO usuario (id, email, password_hash, rol) VALUES "
-        "(:id, :email, :pw, 'MECANICO_MASTER')"
-    ), {"id": uid, "email": f"mec-{uid[:8]}@test.test", "pw": pw_hash})
+        "INSERT INTO usuario (id, email, email_hash, password_hash, rol) VALUES "
+        "(:id, :email, :email_hash, :pw, 'MECANICO_MASTER')"
+    ), {"id": uid, "email": encrypt(email), "email_hash": hash_email(email), "pw": pw_hash})
     await pg_session.flush()
     return uid
 
@@ -147,3 +150,29 @@ class TestTallerRepositoryPG:
         todos = await repo.listar_ots()
         ids = {o.id for o in todos}
         assert ot.id in ids
+
+
+class TestOrdenTrabajoEventoPG:
+    async def test_registrar_y_listar_eventos_ot(self, repo, usuario_id, pg_session):
+        v = Vehiculo(universo="mototaxi", modelo="Bajaj RE PG evento", año=2022)
+        await repo.guardar_vehiculo(v)
+        m = Mecanico(usuario_id=usuario_id, nivel=NivelMecanico.MASTER)
+        await repo.guardar_mecanico(m)
+        ot = OrdenTrabajo(
+            vehiculo_id=v.id, mecanico_master_id=m.id,
+            modalidad=ModalidadIntervencion.CORRECTIVO, urgencia=NivelUrgencia.ALTA,
+        )
+        await repo.guardar_ot(ot)
+
+        await repo.registrar_evento_ot(OrdenTrabajoEvento(
+            ot_id=ot.id, evento="EP-TAL-01-ABRIR",
+            estado_anterior="ABIERTA", estado_nuevo="ABIERTA", actor_id="actor-1",
+        ))
+        await repo.registrar_evento_ot(OrdenTrabajoEvento(
+            ot_id=ot.id, evento="EP-TAL-09-CANCELAR",
+            estado_anterior="ABIERTA", estado_nuevo="CANCELADA", actor_id="actor-1",
+        ))
+
+        eventos = await repo.listar_eventos_ot(ot.id)
+        assert [e.evento for e in eventos] == ["EP-TAL-01-ABRIR", "EP-TAL-09-CANCELAR"]
+        assert eventos[1].estado_nuevo == "CANCELADA"

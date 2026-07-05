@@ -9,6 +9,7 @@ from src.pedidos.domain.models.pedido import (
     Envio,
     ListaReservaProg,
     Pedido,
+    PedidoEvento,
     PedidoNoEncontradoError,
     PlanMantenimiento,
     EstadoPlanMantenimiento,
@@ -29,6 +30,7 @@ class InMemoryPedidoRepository:
         self._deudas: dict[str, DeudaActiva] = {}
         self._listas: dict[str, ListaReservaProg] = {}
         self._planes: dict[str, PlanMantenimiento] = {}
+        self._eventos: list[PedidoEvento] = []
 
     # ── Pedidos ───────────────────────────────────────────────────────────────
 
@@ -44,6 +46,9 @@ class InMemoryPedidoRepository:
 
     async def listar_por_cliente(self, cliente_id: str) -> list[Pedido]:
         return [p for p in self._pedidos.values() if p.cliente_id == cliente_id]
+
+    async def listar_por_actor(self, actor_id: str) -> list[Pedido]:
+        return [p for p in self._pedidos.values() if p.origen_actor == actor_id]
 
     async def actualizar(self, pedido: Pedido) -> Pedido:
         if pedido.id not in self._pedidos:
@@ -147,6 +152,9 @@ class InMemoryPedidoRepository:
         self._listas[lista.id] = lista
         return lista
 
+    async def listar_listas_reserva_por_cliente(self, cliente_id: str) -> list[ListaReservaProg]:
+        return [l for l in self._listas.values() if l.cliente_id == cliente_id]
+
     # ── Planes de mantenimiento ───────────────────────────────────────────────
 
     async def guardar_plan_mantenimiento(self, plan: PlanMantenimiento) -> PlanMantenimiento:
@@ -176,6 +184,15 @@ class InMemoryPedidoRepository:
         self._planes[plan.id] = plan
         return plan
 
+    # ── Auditoría transversal (R29) ──────────────────────────────────────────
+
+    async def registrar_evento(self, evento: PedidoEvento) -> PedidoEvento:
+        self._eventos.append(evento)
+        return evento
+
+    async def listar_eventos(self, pedido_id: str) -> list[PedidoEvento]:
+        return [e for e in self._eventos if e.pedido_id == pedido_id]
+
     def limpiar(self) -> None:
         self._pedidos.clear()
         self._reservas.clear()
@@ -185,3 +202,4 @@ class InMemoryPedidoRepository:
         self._deudas.clear()
         self._listas.clear()
         self._planes.clear()
+        self._eventos.clear()

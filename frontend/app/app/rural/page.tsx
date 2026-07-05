@@ -10,6 +10,10 @@ import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import SessionExpiredHandler from '@/src/components/SessionExpiredHandler'
+import RepuestoCard from '@/src/components/RepuestoCard'
+import RuralResumenTab from '@/src/components/dashboard/RuralResumenTab'
+import { useMiVehiculo } from '@/src/lib/useMiVehiculo'
+import AppSidebarNav from '@/src/components/dashboard/AppSidebarNav'
 
 const TIMEOUT_MS = 30_000
 
@@ -23,13 +27,14 @@ interface Repuesto {
 export default function ClienteRuralDashboard() {
   const { user, logout } = useAuth()
   const router = useRouter()
-  const [seccion, setSeccion] = useState<'¿Qué necesitas?' | 'Mis reservas'>('¿Qué necesitas?')
+  const [seccion, setSeccion] = useState<'Resumen' | '¿Qué necesitas?' | 'Mis reservas'>('Resumen')
   const [busqueda, setBusqueda] = useState('')
   const [repuestos, setRepuestos] = useState<Repuesto[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [timedOut, setTimedOut] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const { vehiculo } = useMiVehiculo()
 
   useEffect(() => {
     if (user && user.rol !== 'CLIENTE_RURAL') { router.replace('/rural'); return }
@@ -55,11 +60,19 @@ export default function ClienteRuralDashboard() {
     }, TIMEOUT_MS)
 
     try {
+      // EP-CAT-01 no soporta búsqueda por texto (`q` no existe en el
+      // contrato real) — antes se enviaba igual y el backend lo ignoraba
+      // silenciosamente, mostrando el universo completo sin filtrar. Ahora
+      // se filtra en cliente sobre el universo real del vehículo (Pieza C).
       const data = await apiClient.get<{repuestos: Repuesto[], total: number}>(
-        `/v1/repuestos?universo=mototaxi_3r&q=${encodeURIComponent(busqueda)}`
+        `/v1/repuestos?universo=${vehiculo?.universo ?? 'mototaxi_3r'}`
       )
       clearTimeout(timeoutId)
-      setRepuestos(data.repuestos ?? [])
+      const termino = busqueda.toLowerCase().trim()
+      const filtrados = termino
+        ? (data.repuestos ?? []).filter(r => r.nombre.toLowerCase().includes(termino) || r.codigo.toLowerCase().includes(termino))
+        : (data.repuestos ?? [])
+      setRepuestos(filtrados)
     } catch (err) {
       clearTimeout(timeoutId)
       if ((err as Error).name === 'AbortError') return
@@ -76,28 +89,24 @@ export default function ClienteRuralDashboard() {
       <SessionExpiredHandler rol="CLIENTE_RURAL" />
       <DashboardHeader userId={user.id} rol="CLIENTE_RURAL" onLogout={logout} />
 
-      <nav className="flex gap-2 px-4 py-3 border-b border-slate-800 overflow-x-auto">
-        {(['¿Qué necesitas?', 'Mis reservas'] as const).map(m => (
-          <button
-            key={m}
-            onClick={() => setSeccion(m)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-body transition-colors border ${
-              seccion === m
-                ? 'bg-teal border-teal text-white font-semibold'
-                : 'text-slate-300 border-slate-700 hover:bg-slate-800'
-            } whitespace-nowrap`}
-          >
-            {m}
-          </button>
-        ))}
-      </nav>
+      <div className="flex flex-col md:flex-row">
+        <AppSidebarNav
+          surface="light"
+          secciones={['Resumen', '¿Qué necesitas?', 'Mis reservas']}
+          activa={seccion}
+          onSeleccionar={s => setSeccion(s as typeof seccion)}
+        />
 
       {/* Vista por defecto: confirmación de stock (10 §4.10 — mismo dolor principal que S1) */}
-      <main className="p-4 md:p-6 space-y-6 max-w-lg mx-auto">
-        {seccion !== '¿Qué necesitas?' && (
-          <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-8 text-center">
+      <main className={`flex-1 min-w-0 w-full p-4 md:p-6 space-y-6 ${seccion === 'Resumen' ? 'max-w-6xl mx-auto' : 'max-w-lg mx-auto'}`}>
+        {seccion === 'Resumen' && <RuralResumenTab />}
+
+        {seccion === 'Mis reservas' && (
+          <section className="rounded-xl bg-white border border-slate-200 shadow-[0_4px_20px_-8px_rgba(15,23,42,0.06)] p-8 text-center">
             <p className="text-slate-400 font-body text-sm">
-              Sección <span className="text-slate-200 font-mono">{seccion}</span> — disponible próximamente.
+              El backend todavía no expone un endpoint para listar tus reservas
+              (solo permite crear una reserva o liberarla). Esta sección quedará
+              activa cuando esa pieza se construya en una sesión de backend.
             </p>
           </section>
         )}
@@ -113,7 +122,7 @@ export default function ClienteRuralDashboard() {
                 placeholder="Código o nombre del repuesto..."
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal"
+                className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm font-body focus:outline-none focus:ring-2 focus:ring-teal"
                 autoFocus
               />
               <button
@@ -142,16 +151,14 @@ export default function ClienteRuralDashboard() {
                 <ErrorDisplay code={error} onRetry={() => buscar()} />
               ) : repuestos.length > 0 ? (
                 <div className="space-y-2">
+                  {/* Payload mínimo (RNT-05/10 §6.6): sin imagen, sin consulta de precio */}
                   {repuestos.map(r => (
-                    <div key={r.codigo} className="rounded-xl bg-slate-800 border border-slate-700 p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-mono text-slate-200">{r.codigo}</p>
-                        <p className="text-xs text-slate-400 font-body">{r.nombre}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-body ${r.activo !== false ? 'bg-teal/20 text-teal' : 'bg-red-900/30 text-red-400'}`}>
-                        {r.activo !== false ? 'Disponible' : 'Sin stock'}
-                      </span>
-                    </div>
+                    <RepuestoCard
+                      key={r.codigo}
+                      codigo={r.codigo}
+                      nombre={r.nombre}
+                      disponible={r.activo !== false}
+                    />
                   ))}
                 </div>
               ) : busqueda && !loading ? (
@@ -161,7 +168,7 @@ export default function ClienteRuralDashboard() {
           </section>
         )}
 
-        <section className="rounded-xl bg-slate-800/50 border border-slate-800 p-5">
+        <section className="rounded-xl bg-white border border-slate-200 shadow-[0_4px_20px_-8px_rgba(15,23,42,0.06)] p-5">
           <h3 className="font-display text-sm font-semibold text-slate-300 mb-2">Cómo funciona</h3>
           <p className="text-sm text-slate-400 font-body">
             Busca el repuesto que necesitas. Si hay señal, ves el stock en segundos. Si la conexión
@@ -170,6 +177,7 @@ export default function ClienteRuralDashboard() {
           </p>
         </section>
       </main>
+      </div>
     </div>
   )
 }

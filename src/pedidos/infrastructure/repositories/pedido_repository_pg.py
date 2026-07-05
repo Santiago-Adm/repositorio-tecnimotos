@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.pedidos.domain.models.pedido import (
     Comprobante,
     DeudaActiva,
+    DistritoAyacucho,
     Envio,
     EstadoComprobante,
     EstadoEnvio,
@@ -30,6 +31,7 @@ from src.pedidos.domain.models.pedido import (
     ListaReservaProg,
     ListaReservaProg_Item,
     Pedido,
+    PedidoEvento,
     PedidoItem,
     Proforma,
     Reserva,
@@ -43,6 +45,7 @@ from src.pedidos.infrastructure.repositories.models.pedido_models import (
     EnvioModel,
     ListaReservaProgresivaItemModel,
     ListaReservaProgresivaModel,
+    PedidoEventoModel,
     PedidoItemModel,
     PedidoModel,
     ProformaModel,
@@ -97,6 +100,15 @@ class PedidoRepositoryPG:
 
     async def listar_por_cliente(self, cliente_id: str) -> list[Pedido]:
         stmt = select(PedidoModel).where(PedidoModel.cliente_id == cliente_id)
+        result = await self._session.execute(stmt)
+        pedidos = []
+        for model in result.scalars().all():
+            items = await self._obtener_items(model.id)
+            pedidos.append(self._pedido_to_domain(model, items))
+        return pedidos
+
+    async def listar_por_actor(self, actor_id: str) -> list[Pedido]:
+        stmt = select(PedidoModel).where(PedidoModel.origen_actor == actor_id)
         result = await self._session.execute(stmt)
         pedidos = []
         for model in result.scalars().all():
@@ -197,6 +209,7 @@ class PedidoRepositoryPG:
             pedido_id=envio.pedido_id,
             empresa_encomienda=envio.empresa_encomienda,
             direccion_destino=envio.direccion_destino,
+            distrito=envio.distrito.value if envio.distrito else None,
             estado=envio.estado.value,
         ))
         await self._session.flush()
@@ -213,6 +226,7 @@ class PedidoRepositoryPG:
             pedido_id=model.pedido_id,
             empresa_encomienda=model.empresa_encomienda,
             direccion_destino=model.direccion_destino,
+            distrito=DistritoAyacucho(model.distrito) if model.distrito else None,
             estado=EstadoEnvio(model.estado),
             created_at=_dt(model.created_at),
         )
@@ -407,6 +421,16 @@ class PedidoRepositoryPG:
         await self._session.flush()
         return lista
 
+    async def listar_listas_reserva_por_cliente(self, cliente_id: str) -> list[ListaReservaProg]:
+        stmt = select(ListaReservaProgresivaModel).where(ListaReservaProgresivaModel.cliente_id == cliente_id)
+        result = await self._session.execute(stmt)
+        listas = []
+        for model in result.scalars().all():
+            lista = await self.obtener_lista_reserva(model.id)
+            if lista is not None:
+                listas.append(lista)
+        return listas
+
     # ── Helpers privados ──────────────────────────────────────────────────────
 
     async def _obtener_items(self, pedido_id: str) -> list[PedidoItem]:
@@ -499,3 +523,37 @@ class PedidoRepositoryPG:
             EstadoReservaEnum.LIBERADA:  [],
         }
         return reserva
+
+    # ── Auditoría transversal (R29, FASE 2) ─────────────────────────────────────
+
+    async def registrar_evento(self, evento: PedidoEvento) -> PedidoEvento:
+        self._session.add(PedidoEventoModel(
+            id=evento.id,
+            pedido_id=evento.pedido_id,
+            evento=evento.evento,
+            estado_anterior=evento.estado_anterior,
+            estado_nuevo=evento.estado_nuevo,
+            actor_id=evento.actor_id,
+        ))
+        await self._session.flush()
+        return evento
+
+    async def listar_eventos(self, pedido_id: str) -> list[PedidoEvento]:
+        stmt = (
+            select(PedidoEventoModel)
+            .where(PedidoEventoModel.pedido_id == pedido_id)
+            .order_by(PedidoEventoModel.timestamp)
+        )
+        result = await self._session.execute(stmt)
+        return [
+            PedidoEvento(
+                id=m.id,
+                pedido_id=m.pedido_id,
+                evento=m.evento,
+                estado_anterior=m.estado_anterior,
+                estado_nuevo=m.estado_nuevo,
+                actor_id=m.actor_id,
+                timestamp=_dt(m.timestamp),
+            )
+            for m in result.scalars().all()
+        ]

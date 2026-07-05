@@ -297,11 +297,13 @@ export default function Home() {
                 Ver catálogo completo con filtros →
               </Link>
             </div>
-
-            {/* E. FOOTER CORPORATIVO */}
-            <PublicFooter />
           </div>
         </section>
+
+        {/* E. FOOTER CORPORATIVO — fuera del max-w-7xl de la sección anterior:
+            anidado ahí, el fondo de la tarjeta flotante quedaba encajonado con
+            margen visible en pantallas anchas (reportado por Sant). */}
+        <PublicFooter />
       </div>
     </>
   )

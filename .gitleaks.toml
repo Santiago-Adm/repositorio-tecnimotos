@@ -2,9 +2,10 @@
 useDefault = true
 
 [allowlist]
-description = "Documentación de formato de variables de entorno — no son secretos reales"
+description = "Documentación de formato de variables de entorno y fixtures de test con contraseñas dummy — no son secretos reales"
 paths = [
-  '''\.doc3/07-criterios-seguridad-ejecutables\.md'''
+  '''\.doc3/07-criterios-seguridad-ejecutables\.md''',
+  '''tests/integration/test_seed_pendiente_habilitacion\.py''',
 ]
 regexes = [
   '''-----BEGIN (RSA )?PRIVATE KEY-----''',

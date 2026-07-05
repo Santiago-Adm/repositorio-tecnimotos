@@ -126,6 +126,12 @@ class LiberarVehiculoCommand:
     actor_id: str
 
 
+@dataclass
+class AceptarOTCommand:
+    ot_id: str
+    mecanico_id: str
+
+
 # ── Use cases ─────────────────────────────────────────────────────────────────
 
 class AbrirOrdenTrabajoUseCase:
@@ -543,6 +549,25 @@ class ObtenerOrdenTrabajoUseCase:
         ot = await self._repo.obtener_ot(ot_id)
         if ot is None:
             raise OrdenTrabajoNoEncontradaError(f"OT {ot_id} no encontrada")
+        return ot
+
+
+class AceptarOrdenTrabajoUseCase:
+    """EP-TAL-17: POST /v1/ordenes-trabajo/{ot_id}/aceptar (Pieza E) — el
+    mecánico master reconoce una OT ya asignada. Solo el mecánico asignado
+    (mecanico_master_id) puede aceptar su propia OT."""
+
+    def __init__(self, repo: TallerRepository) -> None:
+        self._repo = repo
+
+    async def execute(self, command: AceptarOTCommand) -> OrdenTrabajo:
+        ot = await self._repo.obtener_ot(command.ot_id)
+        if ot is None:
+            raise OrdenTrabajoNoEncontradaError(f"OT {command.ot_id} no encontrada")
+        if ot.mecanico_master_id != command.mecanico_id:
+            raise DomainError("Solo el mecánico master asignado puede aceptar esta OT")
+        ot.aceptar()
+        await self._repo.actualizar_ot(ot)
         return ot
 
 

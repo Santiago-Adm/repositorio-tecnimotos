@@ -18,6 +18,7 @@ from api.middleware.database_session import DatabaseSessionMiddleware
 from api.middleware.metrics_collector import MetricsCollectorMiddleware
 from api.middleware.rate_limiter import RateLimiterMiddleware
 from api.routes import admin as admin_router
+from api.routes import analitica as analitica_router
 from api.routes import auth_routes as auth_router
 from api.routes import catalogo as catalogo_router
 from api.routes import metrics as metrics_router
@@ -52,6 +53,9 @@ from src.shared.infrastructure.logging import configure_logging, request_id_var
 from src.shared.infrastructure.parametros_adapters import InMemoryParametrosService
 from src.shared.infrastructure.repositories.reporte_soporte_repository_inmemory import (
     InMemoryReporteSoporteRepository,
+)
+from src.shared.infrastructure.repositories.incidente_repository_inmemory import (
+    InMemoryIncidenteRepository,
 )
 from src.catalogo.infrastructure.repositories.imagen_repuesto_repository_inmemory import (
     InMemoryImagenRepuestoRepository,
@@ -106,6 +110,19 @@ async def _lifespan(app: FastAPI):
     from sqlalchemy import text
     from src.shared.infrastructure.database import create_engine, create_session_factory
 
+    # Redis — bloqueo de fuerza bruta por IP en login (07 §2.5, hallazgo real de
+    # la verificación profunda 2026-07-05: estaba documentado pero nunca
+    # implementado). Redis ya corría en el stack sin ningún uso funcional.
+    try:
+        import redis.asyncio as redis_asyncio
+        redis_client = redis_asyncio.from_url(settings.redis_url, decode_responses=True)
+        await redis_client.ping()
+        app.state.redis = redis_client
+        logger.info("Redis conectado — bloqueo de fuerza bruta por IP activo")
+    except Exception as exc:
+        app.state.redis = None
+        logger.warning("Redis no disponible (%s) — bloqueo de fuerza bruta por IP desactivado", exc)
+
     try:
         engine = create_engine()
         async with engine.connect() as conn:
@@ -113,11 +130,20 @@ async def _lifespan(app: FastAPI):
         app.state.db_session_factory = create_session_factory(engine)
         app.state._pg_engine = engine
         logger.info("PostgreSQL conectado — repos PG activos")
-        try:
-            from src.shared.infrastructure.seed_usuarios import seed_usuarios_dev_pg
-            await seed_usuarios_dev_pg(app.state.db_session_factory)
-        except Exception as exc:
-            logger.warning("seed_usuarios_dev: no se pudo sembrar usuarios PG de desarrollo (%s)", exc)
+        # Hallazgo crítico de la preverificación Pieza 7 (2026-07-05): este seed
+        # no tenía candado de entorno — en un Postgres de producción vacío,
+        # sembraría las 11 cuentas de desarrollo con contraseñas conocidas
+        # (admin123, vendedor123, etc.) usadas toda la sesión. Comparación
+        # estricta == "development" (mismo patrón fail-safe que
+        # email_sender.py) — cualquier otro valor de ENVIRONMENT nunca siembra.
+        if settings.environment == "development":
+            try:
+                from src.shared.infrastructure.seed_usuarios import seed_usuarios_dev_pg
+                await seed_usuarios_dev_pg(app.state.db_session_factory)
+            except Exception as exc:
+                logger.warning("seed_usuarios_dev: no se pudo sembrar usuarios PG de desarrollo (%s)", exc)
+        else:
+            logger.info("seed_usuarios_dev: omitido — ENVIRONMENT=%s (solo corre en development)", settings.environment)
         try:
             from src.shared.infrastructure.seed_parametros import seed_parametros_pg
             await seed_parametros_pg(app.state.db_session_factory)
@@ -136,6 +162,9 @@ async def _lifespan(app: FastAPI):
     engine = getattr(app.state, "_pg_engine", None)
     if engine is not None:
         await engine.dispose()
+    redis_client = getattr(app.state, "redis", None)
+    if redis_client is not None:
+        await redis_client.aclose()
 
 
 def create_app() -> FastAPI:
@@ -194,6 +223,7 @@ def create_app() -> FastAPI:
     app.state.session_store = InMemorySessionStore()
     app.state.parametros_service = InMemoryParametrosService()
     app.state.soporte_repo = InMemoryReporteSoporteRepository()
+    app.state.incidentes_repo = InMemoryIncidenteRepository()
 
     app.state.categoria_repo = InMemoryCategoriaRepository()
     app.state.categoria_repo.vincular_repuesto_repo(app.state.catalogo_repo)
@@ -220,6 +250,7 @@ def create_app() -> FastAPI:
     # Routers
     app.include_router(auth_router.router)
     app.include_router(admin_router.router)
+    app.include_router(analitica_router.router)
     app.include_router(catalogo_router.router)
     app.include_router(stock_router.router)
     app.include_router(pedidos_router.router)

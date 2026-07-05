@@ -137,7 +137,7 @@ async def actualizar_parametro(
 # ── EP-ADM-03 — Crear vehículo ────────────────────────────────────────────────
 
 class CrearVehiculoRequest(BaseModel):
-    universo: str = Field(pattern=r"^(mototaxi|motolineal)$")
+    universo: str = Field(pattern=r"^(motolineal|mototaxi_3r|mototaxi_4r)$")
     modelo: str = Field(min_length=1, max_length=100)
     año: int = Field(ge=1990, le=2100)
     cliente_id: Optional[str] = None

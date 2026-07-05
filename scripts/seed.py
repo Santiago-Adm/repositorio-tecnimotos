@@ -152,7 +152,7 @@ async def seed_taller_nivel1() -> None:
     mecanico = Mecanico(usuario_id="SEED-USR-MEC-001", nivel=NivelMecanico.MASTER)
     await repo.guardar_mecanico(mecanico)
 
-    vehiculo = Vehiculo(universo="mototaxi", modelo="Bajaj RE", año=2020,
+    vehiculo = Vehiculo(universo="mototaxi_3r", modelo="Bajaj RE", año=2020,
                         cliente_id="SEED-CLI-001", placa="AYA-001")
     await repo.guardar_vehiculo(vehiculo)
 

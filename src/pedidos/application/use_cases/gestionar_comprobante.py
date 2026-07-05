@@ -22,6 +22,7 @@ from src.pedidos.domain.models.pedido import (
     ComprobanteNoEncontradoError,
     ComprobanteYaEmitidoError,
     DeudaActiva,
+    DistritoAyacucho,
     DomainError,
     Envio,
     EstadoComprobante,
@@ -73,6 +74,7 @@ class RegistrarEnvioCommand:
     pedido_id: str
     empresa_encomienda: str
     direccion_destino: str
+    distrito: Optional[DistritoAyacucho]
     actor_id: str
 
 
@@ -212,6 +214,7 @@ class RegistrarEnvioUseCase:
             pedido_id=command.pedido_id,
             empresa_encomienda=command.empresa_encomienda,
             direccion_destino=command.direccion_destino,
+            distrito=command.distrito,
         )
         return await self._repo.guardar_envio(envio)
 

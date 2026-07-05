@@ -17,7 +17,7 @@ async def politica_privacidad(request: Request) -> dict:
             "nombre": "Tecnimotos Santi",
             "ruc": "[PENDIENTE — completar antes de deploy]",
             "direccion": "Ayacucho, Perú",
-            "contacto_arco": "san25level@gmail.com",
+            "contacto_arco": "gsant3279@gmail.com",
             "registro_anpdp": "[PENDIENTE — número de registro ANPDP tras inscripción]",
         },
         "finalidad": [
@@ -29,7 +29,7 @@ async def politica_privacidad(request: Request) -> dict:
         ],
         "derechos_arco": {
             "descripcion": "Acceso, Rectificación, Cancelación y Oposición — Ley N.° 29733",
-            "canal": "san25level@gmail.com",
+            "canal": "gsant3279@gmail.com",
             "plazo_respuesta_dias": 20,
         },
         "retencion_datos": {
@@ -55,7 +55,7 @@ async def politica_privacidad(request: Request) -> dict:
             "requerido": True,
             "mecanismo": "Checkbox explícito no premarcado en flujo de registro",
             "revocable": True,
-            "canal_revocacion": "san25level@gmail.com",
+            "canal_revocacion": "gsant3279@gmail.com",
         },
         "version": "1.0",
         "vigente_desde": "2026-06-21",

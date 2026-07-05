@@ -140,7 +140,7 @@ function GridCard({
     : "text-slate-900 font-semibold text-sm tracking-tight capitalize truncate"
 
   const metaClasses = isDark
-    ? "text-slate-450 text-[10px] font-mono tracking-wider uppercase mt-1"
+    ? "text-slate-500 text-[10px] font-mono tracking-wider uppercase mt-1"
     : "text-slate-400 text-[11px] font-mono"
 
   const actionContainerClasses = isDark
@@ -169,7 +169,7 @@ function GridCard({
                     type="button"
                     onClick={irAnterior}
                     aria-label="Imagen anterior"
-                    className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white text-xs flex items-center justify-center opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity before:content-[''] before:absolute before:-inset-[10px]"
                   >
                     ‹
                   </button>
@@ -177,7 +177,7 @@ function GridCard({
                     type="button"
                     onClick={irSiguiente}
                     aria-label="Siguiente imagen"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white text-xs flex items-center justify-center opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity before:content-[''] before:absolute before:-inset-[10px]"
                   >
                     ›
                   </button>
@@ -204,7 +204,7 @@ function GridCard({
 
           {/* Badges Flotantes Estáticos */}
           {universo && (
-            <span className={`absolute bottom-3 left-3 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded select-none ${isDark ? 'bg-slate-950/90 text-slate-350 border border-slate-800/50' : 'bg-slate-900/90 text-white'}`}>
+            <span className={`absolute bottom-3 left-3 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded select-none ${isDark ? 'bg-slate-950/90 text-slate-300 border border-slate-800/50' : 'bg-slate-900/90 text-white'}`}>
               {universo}
             </span>
           )}

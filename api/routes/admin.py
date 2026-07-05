@@ -76,6 +76,14 @@ def _get_stock_repo(request: Request):
     return request.app.state.stock_repo
 
 
+def _get_incidentes_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.shared.infrastructure.repositories.incidente_repository_pg import IncidenteRepositoryPG
+        return IncidenteRepositoryPG(db)
+    return request.app.state.incidentes_repo
+
+
 # ── EP-ADM-01 — Listar parámetros ────────────────────────────────────────────
 
 @router.get(
@@ -152,7 +160,7 @@ async def actualizar_parametro(
 # ── EP-ADM-03 — Crear vehículo ────────────────────────────────────────────────
 
 class CrearVehiculoRequest(BaseModel):
-    universo: str = Field(pattern=r"^(mototaxi|motolineal)$")
+    universo: str = Field(pattern=r"^(motolineal|mototaxi_3r|mototaxi_4r)$")
     modelo: str = Field(min_length=1, max_length=100)
     año: int = Field(ge=1990, le=2100)
     cliente_id: Optional[str] = None
@@ -981,6 +989,94 @@ async def metricas_operacionales(
         },
         request_id=get_request_id(request),
     )
+
+
+# ── EP-ADM-13/14/15 — Incidentes del sistema (ADR-019) ───────────────────────
+
+class CrearIncidenteRequest(BaseModel):
+    descripcion: str = Field(..., min_length=1, max_length=2000)
+    severidad: str = Field(..., pattern="^(BAJA|MEDIA|ALTA|CRITICA)$")
+
+
+def _incidente_to_dict(i) -> dict[str, Any]:
+    return {
+        "id": i.id,
+        "descripcion": i.descripcion,
+        "severidad": i.severidad.value,
+        "estado": i.estado.value,
+        "reportado_por": i.reportado_por,
+        "resuelto_por": i.resuelto_por,
+        "created_at": i.created_at.isoformat(),
+        "resuelto_at": i.resuelto_at.isoformat() if i.resuelto_at else None,
+    }
+
+
+@router.post(
+    "/incidentes",
+    status_code=status.HTTP_201_CREATED,
+    summary="EP-ADM-13: Reportar incidente del sistema",
+)
+async def crear_incidente(
+    request: Request,
+    body: CrearIncidenteRequest,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    from src.shared.domain.models.incidente_sistema import IncidenteSistema, SeveridadIncidente
+
+    repo = _get_incidentes_repo(request)
+    incidente = IncidenteSistema(
+        descripcion=body.descripcion,
+        severidad=SeveridadIncidente(body.severidad),
+        reportado_por=request.state.user_id,
+    )
+    await repo.guardar(incidente)
+    return success_response(_incidente_to_dict(incidente), status_code=201, request_id=get_request_id(request))
+
+
+@router.get(
+    "/incidentes",
+    summary="EP-ADM-14: Listar incidentes del sistema",
+)
+async def listar_incidentes(
+    request: Request,
+    estado: Optional[str] = None,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    repo = _get_incidentes_repo(request)
+    incidentes = await repo.listar(estado=estado)
+    return success_response(
+        {"incidentes": [_incidente_to_dict(i) for i in incidentes], "total": len(incidentes)},
+        request_id=get_request_id(request),
+    )
+
+
+@router.patch(
+    "/incidentes/{incidente_id}/resolver",
+    summary="EP-ADM-15: Resolver incidente del sistema",
+)
+async def resolver_incidente(
+    request: Request,
+    incidente_id: str,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    from src.shared.domain.models.incidente_sistema import IncidenteNoEncontradoError, IncidenteYaResueltoError
+
+    repo = _get_incidentes_repo(request)
+    incidente = await repo.obtener_por_id(incidente_id)
+    if incidente is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"Incidente {incidente_id} no encontrado", request_id=get_request_id(request)),
+        )
+    try:
+        incidente.resolver(resuelto_por=request.state.user_id)
+    except IncidenteYaResueltoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
+        )
+    await repo.actualizar(incidente)
+    return success_response(_incidente_to_dict(incidente), request_id=get_request_id(request))
 
 
 class ImpersonateRequest(BaseModel):

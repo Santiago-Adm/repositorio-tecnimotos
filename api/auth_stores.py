@@ -1,7 +1,10 @@
 """
 InMemory auth stores para tests — reemplazados por PostgreSQL + Redis en producción.
 Implementa el flujo JWT RS256 + MFA de 07 §2.
-Password: PBKDF2-SHA256 en InMemory (producción usa Argon2id+pepper — 07 §2.1).
+Password: Argon2id + pepper (07 §2.1) — con verificación de compatibilidad hacia
+atrás para hashes PBKDF2-SHA256 creados antes de esta migración (hallazgo real
+de la verificación profunda, 2026-07-05): se migran de forma perezosa, en el
+siguiente login exitoso, sin forzar un reset de contraseña a nadie.
 TOTP: cualquier código 6 dígitos válido en InMemory (producción usa TOTP real).
 
 EstadoCuentaUsuario (sesión 2026-06-28):
@@ -21,6 +24,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHashError
+
 # ── MFA por correo — solo cuentas internas de alto privilegio (ADR-011) ──────
 # SUPERADMIN/ADMINISTRADOR reciben un código real de 6 dígitos por correo.
 # El resto de roles mantiene el desafío MFA "de forma" (cualquier 6 dígitos)
@@ -28,22 +34,48 @@ from typing import Optional
 ROLES_MFA_CORREO_REQUERIDO: frozenset[str] = frozenset({"SUPERADMIN", "ADMINISTRADOR"})
 
 
-# ── Password helpers ──────────────────────────────────────────────────────────
+# ── Password helpers — Argon2id + pepper (07 §2.1) ────────────────────────────
+
+_argon2_hasher = PasswordHasher()
+
+
+def _pepper() -> str:
+    # Import diferido — evita import circular con settings en módulos que
+    # cargan auth_stores antes de que la configuración esté lista (tests).
+    from src.shared.infrastructure.settings import get_settings
+    return get_settings().argon2_pepper
+
 
 def _hash_password(plaintext: str) -> str:
-    salt = os.urandom(16)
-    h = hashlib.pbkdf2_hmac("sha256", plaintext.encode(), salt, 100_000)
-    return salt.hex() + ":" + h.hex()
+    return _argon2_hasher.hash(plaintext + _pepper())
+
+
+def _es_hash_pbkdf2_legado(stored: str) -> bool:
+    """Formato viejo: '<salt_hex>:<hash_hex>' — sin el prefijo $argon2 de argon2-cffi."""
+    return ":" in stored and not stored.startswith("$argon2")
 
 
 def _verify_password(plaintext: str, stored: str) -> bool:
+    if _es_hash_pbkdf2_legado(stored):
+        try:
+            salt_hex, h_hex = stored.split(":", 1)
+            salt = bytes.fromhex(salt_hex)
+            expected = hashlib.pbkdf2_hmac("sha256", plaintext.encode(), salt, 100_000)
+            return hmac.compare_digest(expected, bytes.fromhex(h_hex))
+        except Exception:
+            return False
     try:
-        salt_hex, h_hex = stored.split(":", 1)
-        salt = bytes.fromhex(salt_hex)
-        expected = hashlib.pbkdf2_hmac("sha256", plaintext.encode(), salt, 100_000)
-        return hmac.compare_digest(expected, bytes.fromhex(h_hex))
+        return _argon2_hasher.verify(stored, plaintext + _pepper())
+    except (VerifyMismatchError, InvalidHashError):
+        return False
     except Exception:
         return False
+
+
+def _necesita_rehash(stored: str) -> bool:
+    """True si el hash sigue en el formato PBKDF2 viejo — el caller re-hashea
+    con Argon2id tras una verificación exitosa (migración perezosa)."""
+    return _es_hash_pbkdf2_legado(stored)
 
 
 # ── MFA por correo: código de 6 dígitos, siempre hasheado (nunca texto plano) ─
@@ -137,9 +169,21 @@ class SessionRecord:
     usuario_id: str
     refresh_token_hash: str
     estado: str = "ACTIVA"  # "ACTIVA" | "REVOCADA"
+    idle_window_minutos: int = 15
     expires_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7)
     )
+
+
+# Pieza 6-bis — ventana de inactividad por rol (sesión deslizante): roles
+# master trabajan sesiones largas de gestión activa (3h), el resto se cierra
+# a los 15 min sin interacción real en pantalla (mousemove/click/key/scroll).
+IDLE_WINDOW_MINUTOS_MASTER = 180
+IDLE_WINDOW_MINUTOS_DEFAULT = 15
+
+
+def idle_window_para_rol(rol: str) -> int:
+    return IDLE_WINDOW_MINUTOS_MASTER if rol in ROLES_MFA_CORREO_REQUERIDO else IDLE_WINDOW_MINUTOS_DEFAULT
 
 
 # ── Stores ────────────────────────────────────────────────────────────────────
@@ -227,9 +271,11 @@ class InMemoryUserStore:
         """Verifica email + password únicamente. No verifica activo ni estado_cuenta.
         El caller (EP-AUTH-01) decide qué hacer según el estado del usuario."""
         user = await self.buscar_por_email(email)
-        if user and _verify_password(password, user.password_hash):
-            return user
-        return None
+        if not user or not _verify_password(password, user.password_hash):
+            return None
+        if _necesita_rehash(user.password_hash):
+            user.password_hash = _hash_password(password)
+        return user
 
     async def obtener_por_id(self, uid: str) -> Optional[UsuarioRecord]:
         return self._by_id.get(uid)
@@ -260,8 +306,11 @@ class InMemoryUserStore:
         rol: str,
         password: str,
         documentos: list[DocumentoRecord] | None = None,
+        estado_inicial: str = ESTADO_PENDIENTE,
     ) -> UsuarioRecord:
-        """Crea usuario en PENDIENTE_DOCUMENTOS (flujo de autorregistro público)."""
+        """Crea usuario en PENDIENTE_DOCUMENTOS (flujo de autorregistro público) o
+        en el estado explícito que se le pase (ej. EN_REVISION para cuentas
+        sembradas que esperan habilitación manual de ADMINISTRADOR)."""
         if email.lower() in self._by_email:
             raise ValueError(f"Email {email!r} ya registrado")
         uid = str(uuid.uuid4())
@@ -271,7 +320,7 @@ class InMemoryUserStore:
             nombre=nombre,
             rol=rol,
             password_hash=_hash_password(password),
-            estado_cuenta=ESTADO_PENDIENTE,
+            estado_cuenta=estado_inicial,
             documentos=documentos or [],
             variante_tema=_default_variante_tema(rol),
         )
@@ -399,6 +448,7 @@ class InMemorySessionStore:
         self._mfa: dict[str, MfaSessionRecord] = {}   # mfa_token → record
         self._sessions: dict[str, SessionRecord] = {}  # session_id → record
         self._by_refresh_hash: dict[str, str] = {}    # hash → session_id
+        self._dispositivos: dict[str, str] = {}       # token_hash → usuario_id
 
     # ── MFA ──
 
@@ -477,7 +527,7 @@ class InMemorySessionStore:
     def _hash_refresh(self, token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    async def crear_sesion(self, usuario_id: str) -> tuple[str, str]:
+    async def crear_sesion(self, usuario_id: str, idle_window_minutos: int = 15) -> tuple[str, str]:
         """Crea sesión y retorna (session_id, refresh_token_raw)."""
         session_id = str(uuid.uuid4())
         refresh_raw = str(uuid.uuid4())
@@ -486,6 +536,8 @@ class InMemorySessionStore:
             session_id=session_id,
             usuario_id=usuario_id,
             refresh_token_hash=refresh_hash,
+            idle_window_minutos=idle_window_minutos,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=idle_window_minutos),
         )
         self._sessions[session_id] = record
         self._by_refresh_hash[refresh_hash] = session_id
@@ -496,6 +548,9 @@ class InMemorySessionStore:
         Consume refresh_token y emite uno nuevo.
         Retorna (usuario_id, session_id, nuevo_refresh_raw) o None.
         Replay detection: token ya usado invalida familia completa.
+        Sesión deslizante (Pieza 6-bis): cada rotación exitosa extiende
+        expires_at otra vez por idle_window_minutos — solo muere de verdad
+        si nadie llama a refresh dentro de esa ventana (inactividad real).
         """
         h = self._hash_refresh(refresh_raw)
         session_id = self._by_refresh_hash.pop(h, None)
@@ -510,6 +565,7 @@ class InMemorySessionStore:
         nuevo_raw = str(uuid.uuid4())
         nuevo_hash = self._hash_refresh(nuevo_raw)
         record.refresh_token_hash = nuevo_hash
+        record.expires_at = datetime.now(timezone.utc) + timedelta(minutes=record.idle_window_minutos)
         self._by_refresh_hash[nuevo_hash] = session_id
         return record.usuario_id, session_id, nuevo_raw
 
@@ -523,3 +579,18 @@ class InMemorySessionStore:
             self._sessions[session_id].estado = "REVOCADA"
             return True
         return False
+
+    # ── Dispositivo confiable (Pieza 6-bis) ──
+
+    def _hash_dispositivo(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    async def crear_dispositivo_confiable(self, usuario_id: str) -> str:
+        token_raw = secrets.token_urlsafe(32)
+        self._dispositivos[self._hash_dispositivo(token_raw)] = usuario_id
+        return token_raw
+
+    async def verificar_dispositivo(self, usuario_id: str, token_raw: str) -> bool:
+        if not token_raw:
+            return False
+        return self._dispositivos.get(self._hash_dispositivo(token_raw)) == usuario_id

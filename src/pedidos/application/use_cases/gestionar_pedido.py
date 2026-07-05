@@ -99,9 +99,11 @@ class ListarPedidosUseCase:
     def __init__(self, repo: PedidoRepository) -> None:
         self._repo = repo
 
-    async def execute(self, cliente_id: Optional[str] = None) -> list[Pedido]:
+    async def execute(self, cliente_id: Optional[str] = None, actor_id: Optional[str] = None) -> list[Pedido]:
         if cliente_id:
             return await self._repo.listar_por_cliente(cliente_id)
+        if actor_id:
+            return await self._repo.listar_por_actor(actor_id)
         return await self._repo.listar_todos()
 
 

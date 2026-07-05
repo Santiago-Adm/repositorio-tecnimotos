@@ -8,6 +8,7 @@ from src.taller.domain.models.orden_trabajo import (
     HistorialIntervencion,
     Mecanico,
     OrdenTrabajo,
+    OrdenTrabajoEvento,
     Vehiculo,
 )
 
@@ -21,6 +22,7 @@ class InMemoryTallerRepository:
         self._mecanicos: dict[str, Mecanico] = {}
         self._entradas: dict[str, Entrada] = {}
         self._historial: dict[str, HistorialIntervencion] = {}
+        self._eventos_ot: list[OrdenTrabajoEvento] = []
 
     async def guardar_ot(self, ot: OrdenTrabajo) -> OrdenTrabajo:
         self._ots[ot.id] = ot
@@ -48,6 +50,9 @@ class InMemoryTallerRepository:
     async def actualizar_vehiculo(self, v: Vehiculo) -> Vehiculo:
         self._vehiculos[v.id] = v
         return v
+
+    async def listar_vehiculos_por_cliente(self, cliente_id: str) -> list[Vehiculo]:
+        return [v for v in self._vehiculos.values() if v.cliente_id == cliente_id]
 
     async def guardar_mecanico(self, m: Mecanico) -> Mecanico:
         self._mecanicos[m.id] = m
@@ -85,6 +90,9 @@ class InMemoryTallerRepository:
         self._historial[h.id] = h
         return h
 
+    async def listar_historial(self) -> list[HistorialIntervencion]:
+        return list(self._historial.values())
+
     # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
 
     async def obtener_mecanico_id_por_usuario(self, usuario_id: str) -> Optional[str]:
@@ -114,9 +122,19 @@ class InMemoryTallerRepository:
             return True
         return False
 
+    # ── Auditoría transversal (R29) ──────────────────────────────────────────
+
+    async def registrar_evento_ot(self, evento: OrdenTrabajoEvento) -> OrdenTrabajoEvento:
+        self._eventos_ot.append(evento)
+        return evento
+
+    async def listar_eventos_ot(self, ot_id: str) -> list[OrdenTrabajoEvento]:
+        return [e for e in self._eventos_ot if e.ot_id == ot_id]
+
     def limpiar(self) -> None:
         self._ots.clear()
         self._vehiculos.clear()
         self._mecanicos.clear()
         self._entradas.clear()
         self._historial.clear()
+        self._eventos_ot.clear()

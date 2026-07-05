@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from api.auth import (
-    ADMIN_ROLES, INTERNO_ROLES, MECANICO_JUNIOR_ROLES,
+    ADMIN_ROLES, CLIENTE_ROLES, INTERNO_ROLES, MECANICO_JUNIOR_ROLES,
     MECANICO_ROLES, TAL_VENDEDOR_ROLES, require_roles,
 )
 from pydantic import BaseModel, Field
@@ -19,6 +19,8 @@ from api.dependencies import error_response, get_request_id, success_response
 from src.taller.application.use_cases.gestionar_ot import (
     AbrirOrdenTrabajoCommand,
     AbrirOrdenTrabajoUseCase,
+    AceptarOTCommand,
+    AceptarOrdenTrabajoUseCase,
     AgregarRepuestoCommand,
     AgregarRepuestoUseCase,
     AplicarAprobacionesTacitasUseCase,
@@ -50,7 +52,9 @@ from src.taller.domain.models.orden_trabajo import (
     ListaNoConfirmadaError,
     ModalidadIntervencion,
     NivelUrgencia,
+    OrdenTrabajoEvento,
     OrdenTrabajoNoEncontradaError,
+    OTYaAceptadaError,
     TransicionEstadoInvalidaError,
     VehiculoNoEncontradoError,
 )
@@ -89,12 +93,56 @@ def _get_parametros(request: Request):
     return request.app.state.parametros_service
 
 
+def _get_pedido_repo(request: Request):
+    db = getattr(request.state, "db", None)
+    if db is not None:
+        from src.pedidos.infrastructure.repositories.pedido_repository_pg import PedidoRepositoryPG
+        return PedidoRepositoryPG(db)
+    return request.app.state.pedidos_repo
+
+
+@router.get(
+    "/mis-vehiculos",
+    summary="EP-TAL-16: Listar mis vehículos (CLIENTE_*) — Pieza C, sesión de catálogo",
+)
+async def listar_mis_vehiculos(
+    request: Request,
+    _auth: dict = Depends(require_roles(*CLIENTE_ROLES)),
+) -> dict[str, Any]:
+    """Resuelve el cliente_id real del usuario autenticado (igual criterio que
+    GET /v1/pedidos) y devuelve sus vehículos — sin esto, el catálogo no puede
+    auto-filtrarse por universo/modelo del vehículo del cliente."""
+    pedido_repo = _get_pedido_repo(request)
+    cliente_id = await pedido_repo.obtener_cliente_id_por_usuario(request.state.user_id)
+    if cliente_id is None:
+        return success_response({"vehiculos": []}, request_id=get_request_id(request))
+
+    repo = _get_repo(request)
+    vehiculos = await repo.listar_vehiculos_por_cliente(cliente_id)
+    return success_response(
+        {
+            "vehiculos": [
+                {
+                    "vehiculo_id": v.id,
+                    "universo": v.universo,
+                    "modelo": v.modelo,
+                    "año": v.año,
+                    "placa": v.placa,
+                }
+                for v in vehiculos
+            ]
+        },
+        request_id=get_request_id(request),
+    )
+
+
 def _ot_to_dict(ot) -> dict:
     return {
         "ot_id": ot.id,
         "estado": ot.estado.value,
         "vehiculo_id": ot.vehiculo_id,
         "mecanico_master_id": ot.mecanico_master_id,
+        "mecanico_junior_id": ot.mecanico_junior_id,
         "modalidad": ot.modalidad.value,
         "urgencia": ot.urgencia.value,
         "monto_estimado": str(ot.monto_estimado),
@@ -116,6 +164,7 @@ def _ot_to_dict(ot) -> dict:
         "prueba_ruta_completada": ot.prueba_ruta_completada,
         "observaciones_prueba_ruta": ot.observaciones_prueba_ruta,
         "salud_resultado": ot.salud_resultado,
+        "aceptada_en": ot.aceptada_en.isoformat() if ot.aceptada_en else None,
         "created_at": ot.created_at.isoformat(),
     }
 
@@ -177,7 +226,7 @@ async def abrir_ot(
             mecanico_master_id=body.mecanico_master_id,
             modalidad=body.modalidad,
             urgencia=body.urgencia,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
             mecanico_junior_id=body.mecanico_junior_id,
             cliente_id=body.cliente_id,
         ))
@@ -186,6 +235,13 @@ async def abrir_ot(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=error_response("RECURSO_NO_ENCONTRADO", f"Vehículo {body.vehiculo_id} no encontrado", request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-01-ABRIR",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), status_code=201, request_id=get_request_id(request))
 
 
@@ -207,7 +263,7 @@ async def agregar_repuesto(
             ot_id=ot_id,
             codigo=body.codigo,
             cantidad=body.cantidad,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -219,6 +275,13 @@ async def agregar_repuesto(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-02-AGREGAR-REPUESTO",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), status_code=201, request_id=get_request_id(request))
 
 
@@ -236,7 +299,7 @@ async def aprobar_lista(
     try:
         ot = await uc.execute(AprobarListaCommand(
             ot_id=ot_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -248,6 +311,13 @@ async def aprobar_lista(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("APROBACION_REQUERIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-03-APROBAR-LISTA",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
 
 
@@ -265,7 +335,7 @@ async def confirmar_adicional(
         ot = await uc.execute(ConfirmarAdicionalCommand(
             ot_id=ot_id,
             item_id=body.item_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -277,6 +347,13 @@ async def confirmar_adicional(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-04-CONFIRMAR-ADICIONAL",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
 
 
@@ -294,13 +371,20 @@ async def autorizar_precio(
         ot = await uc.execute(AutorizarPrecioCommand(
             ot_id=ot_id,
             cliente_id=body.cliente_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=error_response("RECURSO_NO_ENCONTRADO", f"OT {ot_id} no encontrada", request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-05-AUTORIZAR-PRECIO",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(
         {"ot_id": ot.id, "visibilidad_precio_cliente": ot.visibilidad_precio_cliente},
         request_id=get_request_id(request),
@@ -322,7 +406,7 @@ async def revision_final(
         ot = await uc.execute(RevisionFinalCommand(
             ot_id=ot_id,
             costo_mano_obra=body.costo_mano_obra,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -334,6 +418,13 @@ async def revision_final(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("APROBACION_REQUERIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-06-REVISION-FINAL",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
 
 
@@ -352,7 +443,7 @@ async def cobro_parcial(
             ot_id=ot_id,
             monto_pagado=body.monto_pagado,
             plazo_dias=body.plazo_dias,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -364,6 +455,13 @@ async def cobro_parcial(
             status_code=status.HTTP_409_CONFLICT,
             detail=error_response("COBRO_INSUFICIENTE", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot_id,
+        evento="EP-TAL-07-COBRO-PARCIAL",
+        estado_anterior=EstadoOrdenTrabajo.REVISION_FINAL.value,
+        estado_nuevo=EstadoOrdenTrabajo.REVISION_FINAL.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(
         {k: str(v) if isinstance(v, Decimal) else v for k, v in resultado.items()},
         request_id=get_request_id(request),
@@ -384,7 +482,7 @@ async def cerrar_ot(
     try:
         ot = await uc.execute(CerrarOTCommand(
             ot_id=ot_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -401,6 +499,13 @@ async def cerrar_ot(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-08-CERRAR",
+        estado_anterior=EstadoOrdenTrabajo.REVISION_FINAL.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
 
 
@@ -415,11 +520,13 @@ async def cancelar_ot(
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = CancelarOrdenTrabajoUseCase(repo, pub)
+    ot_previa = await repo.obtener_ot(ot_id)
+    estado_previo = ot_previa.estado.value if ot_previa else None
     try:
         ot = await uc.execute(CancelarOTCommand(
             ot_id=ot_id,
             motivo=body.motivo,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -431,6 +538,13 @@ async def cancelar_ot(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-09-CANCELAR",
+        estado_anterior=estado_previo or ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
 
 
@@ -448,7 +562,7 @@ async def liberar_vehiculo(
     try:
         ot = await uc.execute(LiberarVehiculoCommand(
             ot_id=ot_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except OrdenTrabajoNoEncontradaError:
         raise HTTPException(
@@ -460,6 +574,13 @@ async def liberar_vehiculo(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-10-LIBERAR-VEHICULO",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(
         {"ot_id": ot.id, "vehiculo_id": ot.vehiculo_id, "estado": ot.estado.value},
         request_id=get_request_id(request),
@@ -535,10 +656,52 @@ async def registrar_prueba_ruta(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento_ot(OrdenTrabajoEvento(
+        ot_id=ot.id,
+        evento="EP-TAL-13-PRUEBA-RUTA",
+        estado_anterior=ot.estado.value,
+        estado_nuevo=ot.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(
         {
             **_ot_to_dict(ot),
             "vehiculo_salud_estimada": vehiculo.salud_estimada,
+        },
+        request_id=get_request_id(request),
+    )
+
+
+@router.get(
+    "/ordenes-trabajo/{ot_id}/eventos",
+    summary="EP-TAL-15: Auditoría de eventos de la OT (R29, FASE 2)",
+)
+async def listar_eventos_ot(
+    request: Request,
+    ot_id: str,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    repo = _get_repo(request)
+    ot = await repo.obtener_ot(ot_id)
+    if ot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"OT {ot_id} no encontrada", request_id=get_request_id(request)),
+        )
+    eventos = await repo.listar_eventos_ot(ot_id)
+    return success_response(
+        {
+            "eventos": [
+                {
+                    "evento": e.evento,
+                    "estado_anterior": e.estado_anterior,
+                    "estado_nuevo": e.estado_nuevo,
+                    "actor_id": e.actor_id,
+                    "timestamp": e.timestamp.isoformat(),
+                }
+                for e in eventos
+            ],
+            "total": len(eventos),
         },
         request_id=get_request_id(request),
     )
@@ -564,6 +727,14 @@ async def listar_ots(
     from src.taller.domain.services.ot_activa_service import es_ot_activa, obtener_config_ot_activa
 
     repo = _get_repo(request)
+
+    # MECANICO_MASTER/JUNIOR solo pueden listar sus propias OTs — se resuelve
+    # su mecanico_id real (tabla `mecanico`, distinto del usuario_id del JWT)
+    # server-side y se ignora cualquier mecanico_id recibido por query param
+    # (evita que un mecánico consulte las OTs de otro).
+    if request.state.user_rol in ("MECANICO_MASTER", "MECANICO_JUNIOR"):
+        mecanico_id = await repo.obtener_mecanico_id_por_usuario(request.state.user_id)
+
     ots = await repo.listar_ots()
 
     if estado is not None:
@@ -578,8 +749,21 @@ async def listar_ots(
         config = await obtener_config_ot_activa(parametros_svc)
         ots = [ot for ot in ots if es_ot_activa(ot, config) == activa]
 
+    # Pieza E — se embebe universo/modelo del vehículo para que "Mis OTs" pueda
+    # reabrir el contexto de trabajo (catálogo filtrado) de una OT ya aceptada
+    # sin una segunda llamada. Listas de tamaño acotado (OTs de un mecánico).
+    dicts = []
+    for ot in ots:
+        d = _ot_to_dict(ot)
+        vehiculo = await repo.obtener_vehiculo(ot.vehiculo_id)
+        d["vehiculo"] = (
+            {"universo": vehiculo.universo, "modelo": vehiculo.modelo, "año": vehiculo.año}
+            if vehiculo else None
+        )
+        dicts.append(d)
+
     return success_response(
-        {"ordenes_trabajo": [_ot_to_dict(ot) for ot in ots], "total": len(ots)},
+        {"ordenes_trabajo": dicts, "total": len(ots)},
         request_id=get_request_id(request),
     )
 
@@ -599,3 +783,55 @@ async def obtener_ot(request: Request, ot_id: str) -> dict[str, Any]:
             detail=error_response("RECURSO_NO_ENCONTRADO", f"OT {ot_id} no encontrada", request_id=get_request_id(request)),
         )
     return success_response(_ot_to_dict(ot), request_id=get_request_id(request))
+
+
+@router.post(
+    "/ordenes-trabajo/{ot_id}/aceptar",
+    summary="EP-TAL-17: Aceptar OT asignada (Pieza E)",
+)
+async def aceptar_ot(
+    request: Request,
+    ot_id: str,
+    _auth: dict = Depends(require_roles(*MECANICO_ROLES)),
+) -> dict[str, Any]:
+    """MECANICO_MASTER reconoce formalmente una OT ya asignada — registra
+    `aceptada_en` (auditoría), no cambia `estado`. Solo el mecánico asignado
+    a esta OT puede aceptarla."""
+    repo = _get_repo(request)
+    mecanico_id = await repo.obtener_mecanico_id_por_usuario(request.state.user_id)
+    if mecanico_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response("ACCESO_DENEGADO", "Usuario no es un mecánico registrado", request_id=get_request_id(request)),
+        )
+    uc = AceptarOrdenTrabajoUseCase(repo)
+    try:
+        ot = await uc.execute(AceptarOTCommand(ot_id=ot_id, mecanico_id=mecanico_id))
+    except OrdenTrabajoNoEncontradaError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"OT {ot_id} no encontrada", request_id=get_request_id(request)),
+        )
+    except OTYaAceptadaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_response("OT_YA_ACEPTADA", str(exc), request_id=get_request_id(request)),
+        )
+    except DomainError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response("ACCESO_DENEGADO", str(exc), request_id=get_request_id(request)),
+        )
+
+    vehiculo = await repo.obtener_vehiculo(ot.vehiculo_id)
+    return success_response(
+        {
+            **_ot_to_dict(ot),
+            "vehiculo": {
+                "universo": vehiculo.universo if vehiculo else None,
+                "modelo": vehiculo.modelo if vehiculo else None,
+                "año": vehiculo.año if vehiculo else None,
+            },
+        },
+        request_id=get_request_id(request),
+    )

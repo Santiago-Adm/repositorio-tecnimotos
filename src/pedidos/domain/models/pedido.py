@@ -103,6 +103,26 @@ class EstadoEnvio(str, Enum):
     RESUELTO          = "RESUELTO"
 
 
+class DistritoAyacucho(str, Enum):
+    """Distritos reales de la provincia de Huamanga, Ayacucho (ADR-018)."""
+    AYACUCHO                           = "AYACUCHO"
+    ACOCRO                             = "ACOCRO"
+    ACOS_VINCHOS                       = "ACOS_VINCHOS"
+    CARMEN_ALTO                        = "CARMEN_ALTO"
+    CHIARA                             = "CHIARA"
+    OCROS                              = "OCROS"
+    PACAYCASA                          = "PACAYCASA"
+    QUINUA                             = "QUINUA"
+    SAN_JOSE_DE_TICLLAS                = "SAN_JOSE_DE_TICLLAS"
+    SAN_JUAN_BAUTISTA                  = "SAN_JUAN_BAUTISTA"
+    SANTIAGO_DE_PISCHA                 = "SANTIAGO_DE_PISCHA"
+    SOCOS                              = "SOCOS"
+    TAMBILLO                           = "TAMBILLO"
+    VINCHOS                            = "VINCHOS"
+    JESUS_NAZARENO                     = "JESUS_NAZARENO"
+    ANDRES_AVELINO_CACERES_DORREGARAY  = "ANDRES_AVELINO_CACERES_DORREGARAY"
+
+
 class EstadoComprobante(str, Enum):
     PENDIENTE_VALIDACION = "PENDIENTE_VALIDACION"
     EMITIDO              = "EMITIDO"
@@ -273,6 +293,7 @@ class Envio:
     pedido_id: str
     empresa_encomienda: str
     direccion_destino: str
+    distrito: Optional[DistritoAyacucho] = None
     estado: EstadoEnvio = EstadoEnvio.PREPARADO
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -407,6 +428,20 @@ class ListaReservaProg:
                 f"Solo se puede formalizar desde CONFIRMADA, estado: {self.estado.value}"
             )
         self.estado = EstadoListaReserva.FORMALIZADA
+
+
+@dataclass
+class PedidoEvento:
+    """Auditoría append-only de acciones sobre un pedido (R29) — quién, qué,
+    cuándo. Solo se registran acciones exitosas (mismo criterio que
+    MovimientoStock: una transición inválida nunca llega a crear el evento)."""
+    pedido_id: str
+    evento: str
+    estado_anterior: str
+    estado_nuevo: str
+    actor_id: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass

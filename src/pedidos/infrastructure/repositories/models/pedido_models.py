@@ -36,7 +36,7 @@ class PedidoModel(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     cliente_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("cliente.id"), nullable=True)
     canal_origen: Mapped[str] = mapped_column(String(50), nullable=False)
-    origen_actor: Mapped[str] = mapped_column(String(30), nullable=False)
+    origen_actor: Mapped[str] = mapped_column(String(100), nullable=False)
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="BORRADOR")
     monto_total: Mapped[object] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     descuento_aplicado: Mapped[str | None] = mapped_column(Text, nullable=True)  # cifrado Fernet (03 §5.7)
@@ -165,6 +165,7 @@ class EnvioModel(Base):
     pedido_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("pedido.id", ondelete="CASCADE"), unique=True, nullable=False)
     empresa_encomienda: Mapped[str] = mapped_column(String(100), nullable=False)
     direccion_destino: Mapped[str] = mapped_column(Text, nullable=False)  # cifrado Fernet (03 §5.7)
+    distrito: Mapped[str | None] = mapped_column(String(40), nullable=True)  # ADR-018
     estado: Mapped[str] = mapped_column(String(30), nullable=False, default="PREPARADO")
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
@@ -223,4 +224,22 @@ class DeudaActivaModel(Base):
         Index("idx_deuda_cliente", "cliente_id"),
         Index("idx_deuda_alerta_50", "alerta_50_en"),
         Index("idx_deuda_alerta_venc", "alerta_vencimiento_en"),
+    )
+
+
+class PedidoEventoModel(Base):
+    """Auditoría append-only de acciones sobre un pedido (R29, FASE 2)."""
+    __tablename__ = "pedido_evento"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    pedido_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("pedido.id"), nullable=False)
+    evento: Mapped[str] = mapped_column(String(50), nullable=False)
+    estado_anterior: Mapped[str] = mapped_column(String(20), nullable=False)
+    estado_nuevo: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    timestamp: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_pedido_evento_pedido", "pedido_id"),
+        Index("idx_pedido_evento_actor", "actor_id"),
     )

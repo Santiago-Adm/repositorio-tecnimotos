@@ -4,6 +4,8 @@ Tests de integración — API de taller (EP-TAL-01 a EP-TAL-12).
 import pytest
 from decimal import Decimal
 
+from tests.integration.conftest import make_test_token
+
 
 class TestEPTAL01AbrirOT:
     async def test_abrir_ot(self, taller_client):
@@ -463,3 +465,74 @@ class TestEPTAL12ObtenerOT:
         ot_id = r.json()["data"]["ot_id"]
         response = await taller_client.get(f"/v1/ordenes-trabajo/{ot_id}")
         assert "request_id" in response.json()["meta"]
+
+
+class TestEPTAL17AceptarOT:
+    """Pieza E (sesión catálogo/UI, 2026-07-05) — el mecánico master asignado
+    reconoce una OT ya creada. `aceptada_en` es auditoría, no un estado."""
+
+    @pytest.fixture
+    async def ot_id(self, taller_client) -> str:
+        r = await taller_client.post(
+            "/v1/ordenes-trabajo",
+            json={
+                "vehiculo_id": taller_client._vehiculo_id,
+                "mecanico_master_id": taller_client._mecanico_id,
+                "modalidad": "correctivo",
+                "urgencia": "alta",
+            },
+        )
+        return r.json()["data"]["ot_id"]
+
+    def _token_mecanico_asignado(self, taller_client) -> str:
+        # El fixture taller_client registra al mecánico con usuario_id="u-master".
+        return make_test_token(taller_client._test_private_pem, "MECANICO_MASTER", sub="u-master")
+
+    async def test_aceptar_ot(self, taller_client, ot_id):
+        token = self._token_mecanico_asignado(taller_client)
+        response = await taller_client.post(
+            f"/v1/ordenes-trabajo/{ot_id}/aceptar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["aceptada_en"] is not None
+        assert data["vehiculo"]["modelo"] == "Bajaj RE"
+        assert data["vehiculo"]["universo"] == "mototaxi"
+
+    async def test_aceptar_ot_dos_veces_falla(self, taller_client, ot_id):
+        token = self._token_mecanico_asignado(taller_client)
+        headers = {"Authorization": f"Bearer {token}"}
+        primera = await taller_client.post(f"/v1/ordenes-trabajo/{ot_id}/aceptar", headers=headers)
+        assert primera.status_code == 200
+        segunda = await taller_client.post(f"/v1/ordenes-trabajo/{ot_id}/aceptar", headers=headers)
+        assert segunda.status_code == 409
+
+    async def test_aceptar_ot_mecanico_no_asignado(self, taller_client, ot_id):
+        from src.taller.domain.models.orden_trabajo import Mecanico, NivelMecanico
+        repo = taller_client.app.state.taller_repo
+        otro = Mecanico(usuario_id="u-otro-mecanico", nivel=NivelMecanico.MASTER)
+        await repo.guardar_mecanico(otro)
+        token = make_test_token(taller_client._test_private_pem, "MECANICO_MASTER", sub="u-otro-mecanico")
+        response = await taller_client.post(
+            f"/v1/ordenes-trabajo/{ot_id}/aceptar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+
+    async def test_aceptar_ot_inexistente(self, taller_client):
+        token = self._token_mecanico_asignado(taller_client)
+        response = await taller_client.post(
+            "/v1/ordenes-trabajo/id-99999/aceptar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+    async def test_aceptar_ot_usuario_no_mecanico(self, taller_client, ot_id):
+        # Token ADMINISTRADOR sin registro en la tabla mecanico.
+        token = make_test_token(taller_client._test_private_pem, "ADMINISTRADOR", sub="admin-sin-mecanico")
+        response = await taller_client.post(
+            f"/v1/ordenes-trabajo/{ot_id}/aceptar",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403

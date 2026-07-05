@@ -7,6 +7,8 @@ import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
 import ConfirmActionModal from '@/src/components/ConfirmActionModal'
+import CrearUsuarioModal from './CrearUsuarioModal'
+import { ROL_LABELS, ROLES_CREABLES as ROLES_EDITABLES, ROLES_MASTER } from './usuariosConstants'
 
 interface UserRecord {
   usuario_id: string
@@ -17,28 +19,6 @@ interface UserRecord {
   activo?: boolean
   variante_tema?: string | null
 }
-
-const ROL_LABELS: Record<string, string> = {
-  SUPERADMIN: 'Superadmin',
-  ADMINISTRADOR: 'Administrador',
-  VENDEDOR: 'Vendedor',
-  MECANICO_MASTER: 'Mecánico Master',
-  MECANICO_JUNIOR: 'Mecánico Junior',
-  CLIENTE_CONDUCTOR: 'Cliente Conductor',
-  CLIENTE_DISTRITO: 'Cliente Distrito',
-  CLIENTE_RURAL: 'Cliente Rural',
-  CLIENTE_FLOTA_DUENO: 'Flota Dueño',
-  CLIENTE_FLOTA_CONDUCTOR: 'Flota Conductor',
-  CLIENTE_MOTOLINEAL: 'Motolineal',
-}
-
-const ROLES_EDITABLES = [
-  'VENDEDOR', 'MECANICO_MASTER', 'MECANICO_JUNIOR',
-  'CLIENTE_CONDUCTOR', 'CLIENTE_DISTRITO', 'CLIENTE_RURAL',
-  'CLIENTE_FLOTA_DUENO', 'CLIENTE_FLOTA_CONDUCTOR', 'CLIENTE_MOTOLINEAL',
-]
-
-const ROLES_MASTER = new Set(['SUPERADMIN', 'ADMINISTRADOR'])
 
 const ESTADO_CUENTA_LABELS: Record<string, string> = {
   PENDIENTE_DOCUMENTOS: 'Pendiente Documentos',
@@ -69,6 +49,7 @@ export default function UsuariosManager() {
   const [accionError, setAccionError] = useState<string | null>(null)
 
   const [confirmAccion, setConfirmAccion] = useState<ConfirmAccion>(null)
+  const [creandoUsuario, setCreandoUsuario] = useState(false)
 
   function fetchUsuarios() {
     setLoading(true)
@@ -147,7 +128,13 @@ export default function UsuariosManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setCreandoUsuario(true)}
+          className="px-4 py-2 rounded-lg bg-teal text-white text-xs font-semibold hover:bg-teal/90 transition-colors"
+        >
+          + Crear usuario
+        </button>
         <button onClick={fetchUsuarios} className="text-xs text-teal font-body hover:underline">Actualizar</button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-900/30 p-3 rounded-lg border border-slate-800">
@@ -283,6 +270,13 @@ export default function UsuariosManager() {
         onConfirm={ejecutarAccionConfirmada}
         onCancel={() => setConfirmAccion(null)}
       />
+
+      {creandoUsuario && (
+        <CrearUsuarioModal
+          onCerrar={() => setCreandoUsuario(false)}
+          onCreado={() => { setCreandoUsuario(false); fetchUsuarios() }}
+        />
+      )}
     </div>
   )
 }

@@ -47,9 +47,13 @@ function LoginContent() {
     setErrorMsg(null)
     setSubmitting(true)
     try {
-      const token = await login(email, password)
-      setMfaSessionToken(token)
-      setStep('mfa')
+      const resultado = await login(email, password)
+      // Pieza 6-bis: si needsMfa es false, el dispositivo ya era confiable —
+      // AuthContext ya guardó la sesión y redirigió, no hay paso de MFA que mostrar.
+      if (resultado.needsMfa) {
+        setMfaSessionToken(resultado.mfaSessionToken)
+        setStep('mfa')
+      }
     } catch (err) {
       if (err instanceof ApiCallError) {
         setErrorMsg(

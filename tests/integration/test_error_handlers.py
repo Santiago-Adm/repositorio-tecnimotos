@@ -151,7 +151,7 @@ async def test_registrar_envio_domain_error_retorna_422(pedidos_client):
         new=AsyncMock(side_effect=PedidosDomainError("estado no permite despacho")),
     ):
         r = await pedidos_client.post("/v1/pedidos/any-id/envio", json={
-            "empresa_encomienda": "Olva", "direccion_destino": "Jr. Lima 123",
+            "empresa_encomienda": "Olva", "direccion_destino": "Jr. Lima 123", "distrito": "AYACUCHO",
         })
     assert r.status_code == 422
     assert r.json()["detail"]["error"]["code"] == "TRANSICION_ESTADO_INVALIDA"

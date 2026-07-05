@@ -36,6 +36,10 @@ class CobroNoConfirmadoError(DomainError):
     pass
 
 
+class OTYaAceptadaError(DomainError):
+    pass
+
+
 class VehiculoNoEncontradoError(DomainError):
     pass
 
@@ -241,6 +245,22 @@ class Entrada:
 
 
 @dataclass
+class OrdenTrabajoEvento:
+    """Auditoría append-only de acciones sobre una OT (R29) — quién, qué,
+    cuándo. Cubre tanto transiciones de `estado` como acciones que solo
+    cambian un flag (ej. autorizar-precio, cobro-parcial): en esas,
+    estado_anterior == estado_nuevo y el campo `evento` es lo que distingue
+    la acción real."""
+    ot_id: str
+    evento: str
+    estado_anterior: str
+    estado_nuevo: str
+    actor_id: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
 class OrdenTrabajo:
     """
     Registro formal de una intervención técnica sobre un vehículo (02 §1.1).
@@ -262,6 +282,7 @@ class OrdenTrabajo:
     prueba_ruta_completada: bool = False
     observaciones_prueba_ruta: Optional[str] = None
     salud_resultado: Optional[int] = None
+    aceptada_en: Optional[datetime] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -297,6 +318,17 @@ class OrdenTrabajo:
                 f"Transición inválida: {self.estado.value} → {nuevo_estado.value}"
             )
         self.estado = nuevo_estado
+        self.updated_at = datetime.now(timezone.utc)
+
+    def aceptar(self) -> None:
+        """Pieza E (sesión catálogo/UI, 2026-07-05) — el mecánico master
+        reconoce formalmente una OT ya asignada. No es una transición de
+        `estado` (una OT ABIERTA ya está asignada desde su creación, EP-TAL-01
+        exige mecanico_master_id); `aceptada_en` es un registro de auditoría
+        independiente del ciclo ABIERTA→...→CERRADA."""
+        if self.aceptada_en is not None:
+            raise OTYaAceptadaError(f"OT {self.id} ya fue aceptada el {self.aceptada_en.isoformat()}")
+        self.aceptada_en = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
 
     def agregar_repuesto_inicial(self, item: ListaRepuestosOT) -> None:

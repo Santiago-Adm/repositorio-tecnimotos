@@ -58,11 +58,25 @@ class TestListarOrdenesTrabajo:
         assert data["ordenes_trabajo"][0]["estado"] == "CERRADA"
 
     async def test_filtra_por_mecanico(self, app_client, ots_variadas):
-        token = make_test_token(app_client._test_private_pem, "MECANICO_MASTER")
+        # ADMINISTRADOR (staff) puede filtrar por cualquier mecanico_id — a
+        # diferencia de MECANICO_MASTER/JUNIOR, que quedan forzados al propio
+        # (ver test_mecanico_master_ignora_mecanico_id_ajeno).
+        token = make_test_token(app_client._test_private_pem, "ADMINISTRADOR")
         r = await app_client.get(
             "/v1/ordenes-trabajo?mecanico_id=mec-1", headers={"Authorization": f"Bearer {token}"}
         )
         assert r.json()["data"]["total"] == 2
+
+    async def test_mecanico_master_ignora_mecanico_id_ajeno(self, app_client, ots_variadas):
+        # MECANICO_MASTER autenticado como "test-user" (sin fila `mecanico`
+        # real en este fixture) intenta pasar mecanico_id="mec-1" (ajeno) —
+        # el backend debe ignorarlo y resolver su propio mecanico_id real,
+        # que no existe en este fixture, así que no debe filtrar por mec-1.
+        token = make_test_token(app_client._test_private_pem, "MECANICO_MASTER")
+        r = await app_client.get(
+            "/v1/ordenes-trabajo?mecanico_id=mec-1", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.json()["data"]["total"] != 2
 
     async def test_filtra_por_activa_usa_regla_configurable(self, app_client, ots_variadas):
         """Default: ABIERTA cuenta como activa solo si <= 7 días abierta (ADR-015)."""

@@ -10,7 +10,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from api.auth import (
-    ADMIN_ROLES, CLIENTE_ROLES, MECANICO_ROLES, VENDEDOR_ROLES, require_roles,
+    ADMIN_ROLES, ALL_AUTH_ROLES, CLIENTE_ROLES, INTERNO_ROLES, MECANICO_ROLES,
+    VENDEDOR_ROLES, require_roles,
 )
 from pydantic import BaseModel, Field
 
@@ -60,9 +61,12 @@ from src.pedidos.application.use_cases.gestionar_plan_mantenimiento import (
 from src.pedidos.domain.models.pedido import (
     ComprobanteNoEncontradoError,
     ComprobanteYaEmitidoError,
+    DistritoAyacucho,
     DomainError,
     EstadoComprobante,
+    EstadoPedido,
     ListaReservaNoEncontradaError,
+    PedidoEvento,
     PedidoNoEncontradoError,
     PlanMantenimientoNoEncontradoError,
     PlanYaActivoError,
@@ -171,6 +175,7 @@ class GenerarComprobanteRequest(BaseModel):
 class RegistrarEnvioRequest(BaseModel):
     empresa_encomienda: str = Field(min_length=1)
     direccion_destino: str = Field(min_length=1)
+    distrito: DistritoAyacucho
 
 
 class ItemListaRequest(BaseModel):
@@ -193,7 +198,11 @@ class CrearListaReservaRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="EP-PED-01: Crear pedido",
 )
-async def crear_pedido(request: Request, body: CrearPedidoRequest) -> dict[str, Any]:
+async def crear_pedido(
+    request: Request,
+    body: CrearPedidoRequest,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     catalogo = _get_catalogo(request)
     pub = _get_event_publisher(request)
@@ -201,7 +210,7 @@ async def crear_pedido(request: Request, body: CrearPedidoRequest) -> dict[str, 
     try:
         pedido = await uc.execute(CrearPedidoCommand(
             canal_origen=body.canal_origen,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
             items=[ItemPedidoInput(codigo=i.codigo, cantidad=i.cantidad) for i in body.items],
             cliente_id=body.cliente_id,
             orden_trabajo_id=body.orden_trabajo_id,
@@ -211,24 +220,76 @@ async def crear_pedido(request: Request, body: CrearPedidoRequest) -> dict[str, 
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("VALIDACION_FALLIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido.id,
+        evento="EP-PED-01-CREADO",
+        estado_anterior=pedido.estado.value,
+        estado_nuevo=pedido.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_pedido_to_dict(pedido), status_code=201, request_id=get_request_id(request))
 
 
 @router.get("/pedidos", summary="EP-PED-02: Listar pedidos")
 async def listar_pedidos(
-    request: Request, cliente_id: Optional[str] = None
+    request: Request,
+    cliente_id: Optional[str] = None,
+    mios: Optional[bool] = None,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
+
+    # CLIENTE_* solo puede listar sus propios pedidos — se resuelve su
+    # cliente_id real (tabla `cliente`, distinto del usuario_id del JWT,
+    # `pedido.cliente_id` tiene FK real a `cliente.id`) server-side y se
+    # ignora cualquier cliente_id recibido por query param (evita IDOR).
+    # Si no se puede resolver (usuario sin fila `cliente`), no cae al listado
+    # completo — el use case trata cliente_id=None como "sin filtro" (EP-PED-02).
+    actor_id = None
+    if request.state.user_rol not in INTERNO_ROLES:
+        cliente_id = await repo.obtener_cliente_id_por_usuario(request.state.user_id)
+        if cliente_id is None:
+            return success_response({"pedidos": [], "total": 0}, request_id=get_request_id(request))
+    elif mios:
+        # Roles internos (ej. VENDEDOR) piden "mis pedidos registrados" — se
+        # resuelve el actor_id server-side desde el JWT, nunca desde query
+        # param, mismo criterio IDOR-safe que cliente_id arriba.
+        actor_id = request.state.user_id
+
     uc = ListarPedidosUseCase(repo)
-    pedidos = await uc.execute(cliente_id=cliente_id)
+    pedidos = await uc.execute(cliente_id=cliente_id, actor_id=actor_id)
     return success_response(
         {"pedidos": [_pedido_to_dict(p) for p in pedidos], "total": len(pedidos)},
         request_id=get_request_id(request),
     )
 
 
+@router.get("/pedidos/comprobantes/mios", summary="EP-PED-22: Mis comprobantes emitidos (VENDEDOR)")
+async def listar_mis_comprobantes(
+    request: Request,
+    _auth: dict = Depends(require_roles(*VENDEDOR_ROLES)),
+) -> dict[str, Any]:
+    repo = _get_repo(request)
+    comprobantes = await repo.listar_comprobantes()
+    mios = [c for c in comprobantes if c.emitido_por == request.state.user_id]
+    return success_response(
+        {
+            "comprobantes": [
+                {"comprobante_id": c.id, "pedido_id": c.pedido_id, "estado": c.estado.value, "monto": str(c.monto), "created_at": c.created_at.isoformat()}
+                for c in mios
+            ],
+            "total": len(mios),
+        },
+        request_id=get_request_id(request),
+    )
+
+
 @router.get("/pedidos/{pedido_id}", summary="EP-PED-03: Obtener pedido")
-async def obtener_pedido(request: Request, pedido_id: str) -> dict[str, Any]:
+async def obtener_pedido(
+    request: Request,
+    pedido_id: str,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ObtenerPedidoUseCase(repo)
     try:
@@ -238,11 +299,60 @@ async def obtener_pedido(request: Request, pedido_id: str) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=error_response("RECURSO_NO_ENCONTRADO", f"Pedido {pedido_id} no encontrado", request_id=get_request_id(request)),
         )
+    # CLIENTE_* solo puede ver sus propios pedidos — se resuelve su cliente_id
+    # real (tabla `cliente`, distinta de `usuario`) para comparar contra
+    # pedido.cliente_id. 404 (no 403) para no confirmar pedidos ajenos (IDOR).
+    if request.state.user_rol not in INTERNO_ROLES:
+        cliente_id_propio = await repo.obtener_cliente_id_por_usuario(request.state.user_id)
+        if pedido.cliente_id != cliente_id_propio:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_response("RECURSO_NO_ENCONTRADO", f"Pedido {pedido_id} no encontrado", request_id=get_request_id(request)),
+            )
     return success_response(_pedido_to_dict(pedido), request_id=get_request_id(request))
 
 
+@router.get(
+    "/pedidos/{pedido_id}/eventos",
+    summary="EP-PED-20: Auditoría de eventos del pedido (R29, FASE 2)",
+)
+async def listar_eventos_pedido(
+    request: Request,
+    pedido_id: str,
+    _auth: dict = Depends(require_roles(*ADMIN_ROLES)),
+) -> dict[str, Any]:
+    repo = _get_repo(request)
+    pedido = await repo.obtener_por_id(pedido_id)
+    if pedido is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("RECURSO_NO_ENCONTRADO", f"Pedido {pedido_id} no encontrado", request_id=get_request_id(request)),
+        )
+    eventos = await repo.listar_eventos(pedido_id)
+    return success_response(
+        {
+            "eventos": [
+                {
+                    "evento": e.evento,
+                    "estado_anterior": e.estado_anterior,
+                    "estado_nuevo": e.estado_nuevo,
+                    "actor_id": e.actor_id,
+                    "timestamp": e.timestamp.isoformat(),
+                }
+                for e in eventos
+            ],
+            "total": len(eventos),
+        },
+        request_id=get_request_id(request),
+    )
+
+
 @router.post("/pedidos/{pedido_id}/confirmar", summary="EP-PED-04: Confirmar pedido")
-async def confirmar_pedido(request: Request, pedido_id: str) -> dict[str, Any]:
+async def confirmar_pedido(
+    request: Request,
+    pedido_id: str,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     stock = _get_stock(request)
     pub = _get_event_publisher(request)
@@ -250,7 +360,7 @@ async def confirmar_pedido(request: Request, pedido_id: str) -> dict[str, Any]:
     try:
         pedido = await uc.execute(ConfirmarPedidoCommand(
             pedido_id=pedido_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         ))
     except PedidoNoEncontradoError:
         raise HTTPException(
@@ -262,20 +372,34 @@ async def confirmar_pedido(request: Request, pedido_id: str) -> dict[str, Any]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("STOCK_INSUFICIENTE", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido.id,
+        evento="EP-PED-04-CONFIRMAR",
+        estado_anterior=EstadoPedido.BORRADOR.value,
+        estado_nuevo=pedido.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_pedido_to_dict(pedido), request_id=get_request_id(request))
 
 
 @router.post("/pedidos/{pedido_id}/cancelar", summary="EP-PED-05: Cancelar pedido")
 async def cancelar_pedido(
-    request: Request, pedido_id: str, body: CancelarPedidoRequest
+    request: Request,
+    pedido_id: str,
+    body: CancelarPedidoRequest,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
 ) -> dict[str, Any]:
     repo = _get_repo(request)
     pub = _get_event_publisher(request)
     uc = CancelarPedidoUseCase(repo, pub)
+    estado_previo = None
     try:
+        pedido_actual = await repo.obtener_por_id(pedido_id)
+        if pedido_actual is not None:
+            estado_previo = pedido_actual.estado.value
         pedido = await uc.execute(CancelarPedidoCommand(
             pedido_id=pedido_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
             motivo=body.motivo,
             es_cliente=body.es_cliente,
         ))
@@ -289,6 +413,13 @@ async def cancelar_pedido(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido.id,
+        evento="EP-PED-05-CANCELAR",
+        estado_anterior=estado_previo or pedido.estado.value,
+        estado_nuevo=pedido.estado.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(_pedido_to_dict(pedido), request_id=get_request_id(request))
 
 
@@ -423,7 +554,8 @@ async def registrar_envio(
             pedido_id=pedido_id,
             empresa_encomienda=body.empresa_encomienda,
             direccion_destino=body.direccion_destino,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            distrito=body.distrito,
+            actor_id=request.state.user_id,
         ))
     except PedidoNoEncontradoError:
         raise HTTPException(
@@ -435,6 +567,13 @@ async def registrar_envio(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido_id,
+        evento="EP-PED-09-ENVIO",
+        estado_anterior=EstadoPedido.EN_PREPARACION.value,
+        estado_nuevo=EstadoPedido.DESPACHADO.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response(
         {"envio_id": envio.id, "estado": envio.estado.value},
         status_code=201,
@@ -446,13 +585,17 @@ async def registrar_envio(
     "/pedidos/{pedido_id}/confirmar-recepcion",
     summary="EP-PED-10: Confirmar recepción",
 )
-async def confirmar_recepcion(request: Request, pedido_id: str) -> dict[str, Any]:
+async def confirmar_recepcion(
+    request: Request,
+    pedido_id: str,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = ConfirmarRecepcionUseCase(repo)
     try:
         await uc.execute(
             pedido_id=pedido_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         )
     except PedidoNoEncontradoError:
         raise HTTPException(
@@ -464,6 +607,13 @@ async def confirmar_recepcion(request: Request, pedido_id: str) -> dict[str, Any
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido_id,
+        evento="EP-PED-10-CONFIRMAR-RECEPCION",
+        estado_anterior=EstadoPedido.DESPACHADO.value,
+        estado_nuevo=EstadoPedido.ENTREGADO.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response({"pedido_id": pedido_id, "estado": "ENTREGADO"}, request_id=get_request_id(request))
 
 
@@ -471,13 +621,17 @@ async def confirmar_recepcion(request: Request, pedido_id: str) -> dict[str, Any
     "/pedidos/{pedido_id}/incidencia",
     summary="EP-PED-11: Registrar incidencia",
 )
-async def registrar_incidencia(request: Request, pedido_id: str) -> dict[str, Any]:
+async def registrar_incidencia(
+    request: Request,
+    pedido_id: str,
+    _auth: dict = Depends(require_roles(*ALL_AUTH_ROLES)),
+) -> dict[str, Any]:
     repo = _get_repo(request)
     uc = RegistrarIncidenciaUseCase(repo)
     try:
         await uc.execute(
             pedido_id=pedido_id,
-            actor_id=getattr(request.state, "usuario_id", ""),
+            actor_id=request.state.user_id,
         )
     except PedidoNoEncontradoError:
         raise HTTPException(
@@ -489,6 +643,13 @@ async def registrar_incidencia(request: Request, pedido_id: str) -> dict[str, An
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_response("TRANSICION_ESTADO_INVALIDA", str(exc), request_id=get_request_id(request)),
         )
+    await repo.registrar_evento(PedidoEvento(
+        pedido_id=pedido_id,
+        evento="EP-PED-11-INCIDENCIA",
+        estado_anterior=EstadoPedido.DESPACHADO.value,
+        estado_nuevo=EstadoPedido.INCIDENCIA.value,
+        actor_id=request.state.user_id,
+    ))
     return success_response({"pedido_id": pedido_id, "estado": "INCIDENCIA"}, request_id=get_request_id(request))
 
 
@@ -504,6 +665,41 @@ async def solicitar_notificacion_repuesto(
 ) -> dict[str, Any]:
     return success_response(
         {"mensaje": "Notificación registrada"},
+        request_id=get_request_id(request),
+    )
+
+
+@router.get(
+    "/lista-reserva-progresiva/mias",
+    summary="EP-PED-21: Mis listas de reserva progresiva (CLIENTE_DISTRITO)",
+)
+async def listar_mis_listas_reserva(
+    request: Request,
+    _auth: dict = Depends(require_roles("CLIENTE_DISTRITO")),
+) -> dict[str, Any]:
+    repo = _get_repo(request)
+    cliente_id = await repo.obtener_cliente_id_por_usuario(request.state.user_id)
+    if cliente_id is None:
+        return success_response({"listas": [], "total": 0}, request_id=get_request_id(request))
+    listas = await repo.listar_listas_reserva_por_cliente(cliente_id)
+    return success_response(
+        {
+            "listas": [
+                {
+                    "lista_id": l.id,
+                    "nombre": l.nombre,
+                    "estado": l.estado.value,
+                    "total_items": len(l.items),
+                    "ultima_actividad": l.ultima_actividad.isoformat(),
+                    "items": [
+                        {"codigo": i.codigo, "cantidad": i.cantidad, "precio_referencia": str(i.precio_referencia)}
+                        for i in l.items
+                    ],
+                }
+                for l in listas
+            ],
+            "total": len(listas),
+        },
         request_id=get_request_id(request),
     )
 

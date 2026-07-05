@@ -1,130 +1,102 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { LogoSanti } from '@/src/components/ui/LogoSanti'
+
+/** Cuadrado decorativo con gradiente — mismo lenguaje visual que el isotipo, antepuesto a cada título de columna. */
+function TituloColumna({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
+      <span className="w-2 h-2 rounded-[3px] bg-gradient-to-br from-teal to-electric shrink-0" aria-hidden="true" />
+      {children}
+    </h3>
+  )
+}
+
+/** Link con punto que crece y brilla electric al hover (sesión 2026-07-05, rediseño de footer). */
+function LinkFooter({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="group/link flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-teal transition-colors">
+      <span className="w-1 h-1 rounded-full bg-slate-600 group-hover/link:w-1.5 group-hover/link:h-1.5 group-hover/link:bg-electric group-hover/link:shadow-[0_0_6px_rgba(139,92,246,0.8)] transition-all duration-200 shrink-0" aria-hidden="true" />
+      {children}
+    </Link>
+  )
+}
 
 export default function PublicFooter() {
   return (
-    <footer className="bg-slate-900 text-slate-350 border-t border-slate-800/80 mt-20 pt-16 pb-8 px-4 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* BLOQUE SUPERIOR: GRILLA DE ENLACES */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-          {/* Columna 1: Segmentos */}
-          <div>
-            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
-              Segmentos
-            </h3>
-            <ul className="space-y-2.5">
-              <li>
-                <Link href="/conductor" className="hover:text-teal text-sm font-medium transition-colors">
-                  Conductor Individual
-                </Link>
-              </li>
-              <li>
-                <Link href="/distrito" className="hover:text-teal text-sm font-medium transition-colors">
-                  Mecánico de Distrito
-                </Link>
-              </li>
-              <li>
-                <Link href="/rural" className="hover:text-teal text-sm font-medium transition-colors">
-                  Operación Rural
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Columna 2: Plataforma */}
-          <div>
-            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
-              Plataforma
-            </h3>
-            <ul className="space-y-2.5">
-              <li>
-                <Link href="/catalogo" className="hover:text-teal text-sm font-medium transition-colors">
-                  Catálogo Digital
-                </Link>
-              </li>
-              <li>
-                <Link href="/catalogo" className="hover:text-teal text-sm font-medium transition-colors">
-                  Separación de Repuestos
-                </Link>
-              </li>
-              <li>
-                <Link href="/login" className="hover:text-teal text-sm font-medium transition-colors">
-                  Estado de Taller
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Columna 3: Soporte Técnico */}
-          <div>
-            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
-              Soporte Técnico
-            </h3>
-            <ul className="space-y-2.5">
-              <li>
-                <Link href="/soporte" className="hover:text-teal text-sm font-medium transition-colors">
-                  Centro de Ayuda (FAQ)
-                </Link>
-              </li>
-              <li>
-                <Link href="/convenio" className="hover:text-teal text-sm font-medium transition-colors">
-                  Convenio SENATI
-                </Link>
-              </li>
-              <li>
-                <Link href="/guias" className="hover:text-teal text-sm font-medium transition-colors">
-                  Guías de Despiece Bajaj/TVS
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Columna 4: Legal y Garantías */}
-          <div>
-            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
-              Legal y Garantías
-            </h3>
-            <ul className="space-y-2.5">
-              <li>
-                <Link href="/privacidad" className="hover:text-teal text-sm font-medium transition-colors">
-                  Política de Privacidad
-                </Link>
-              </li>
-              <li>
-                <Link href="/terminos" className="hover:text-teal text-sm font-medium transition-colors">
-                  Términos del Servicio
-                </Link>
-              </li>
-              <li>
-                <Link href="/retencion" className="hover:text-teal text-sm font-medium transition-colors">
-                  Políticas de Retención (R30)
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Columna 5: Identidad de Marca */}
-          <div>
-            <span className="block text-2xl font-extrabold tracking-tight font-display bg-gradient-to-r from-teal to-purple-500 bg-clip-text text-transparent mb-2">
-              SANTI
-            </span>
-            <p className="text-slate-400 text-xs leading-relaxed font-body">
-              Distribuidor Autorizado Bajaj & TVS en la región de Ayacucho.
-            </p>
-          </div>
-        </div>
+    <footer className="relative bg-slate-950 pt-8 pb-8 px-4 lg:px-8">
+      {/* Glows ambientales — contenedor propio con overflow-hidden: el <footer>
+          NO puede tener overflow-hidden, porque rompería el margen negativo de
+          la tarjeta flotante (deja de "colapsar" con el padre y la recorta —
+          bug real encontrado en verificación, Sant lo reportó como el link
+          "Ver catálogo completo" superpuesto sobre la tarjeta). */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div className="absolute top-0 right-0 w-[420px] h-[420px] bg-electric/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-teal/10 rounded-full blur-[140px]" />
       </div>
 
-      {/* BLOQUE INFERIOR: ACCIONES Y DERECHOS DE AUTOR */}
-      <hr className="border-slate-800 my-8" />
-      
-      <div className="w-full bg-slate-900 border-t border-slate-800/60 transition-all">
-          <div className="max-w-7xl mx-auto py-4 md:py-3 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
-            
-            {/* BLOQUE ALINEADO A LA IZQUIERDA: LEGAL Y CREDENCIALES */}
+      <div className="relative">
+        {/* Tarjeta flotante glassmorphism — el fondo se adapta al ancho real del
+          navegador (antes tenía max-w-7xl aquí mismo, dejaba margen abierto en
+          pantallas anchas, reportado por Sant); el contenido interno sí
+          mantiene max-w-7xl para no estirarse demasiado en monitores ultra-anchos. */}
+        <div className="relative -mt-4 mb-8 rounded-[24px] bg-slate-900/70 backdrop-blur-2xl backdrop-saturate-150 border border-slate-800/60 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.6)] p-8 lg:p-10">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+            <div>
+              <TituloColumna>Segmentos</TituloColumna>
+              <ul className="space-y-2.5">
+                <li><LinkFooter href="/conductor">Conductor Individual</LinkFooter></li>
+                <li><LinkFooter href="/distrito">Mecánico de Distrito</LinkFooter></li>
+                <li><LinkFooter href="/rural">Operación Rural</LinkFooter></li>
+              </ul>
+            </div>
+
+            <div>
+              <TituloColumna>Plataforma</TituloColumna>
+              <ul className="space-y-2.5">
+                <li><LinkFooter href="/catalogo">Catálogo Digital</LinkFooter></li>
+                <li><LinkFooter href="/catalogo">Separación de Repuestos</LinkFooter></li>
+                <li><LinkFooter href="/login">Estado de Taller</LinkFooter></li>
+              </ul>
+            </div>
+
+            <div>
+              <TituloColumna>Soporte Técnico</TituloColumna>
+              <ul className="space-y-2.5">
+                <li><LinkFooter href="/soporte">Centro de Ayuda (FAQ)</LinkFooter></li>
+                <li><LinkFooter href="/convenio">Convenio SENATI</LinkFooter></li>
+                <li><LinkFooter href="/guias">Guías de Despiece Bajaj/TVS</LinkFooter></li>
+              </ul>
+            </div>
+
+            <div>
+              <TituloColumna>Legal y Garantías</TituloColumna>
+              <ul className="space-y-2.5">
+                <li><LinkFooter href="/privacidad">Política de Privacidad</LinkFooter></li>
+                <li><LinkFooter href="/terminos">Términos del Servicio</LinkFooter></li>
+                <li><LinkFooter href="/retencion">Políticas de Retención</LinkFooter></li>
+              </ul>
+            </div>
+
+            <div>
+              <span className="block text-2xl font-extrabold tracking-tight font-display bg-gradient-to-r from-teal to-electric bg-clip-text text-transparent mb-2">
+                SANTI
+              </span>
+              <p className="text-slate-400 text-xs leading-relaxed font-body mb-1">
+                Sistema de Asistencia y Núcleo Técnico Integral.
+              </p>
+              <p className="text-slate-500 text-xs leading-relaxed font-body">
+                Distribuidor Autorizado Bajaj &amp; TVS en la región de Ayacucho.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Barra inferior flotante — panel independiente, ya no una franja repetida */}
+        <div className="rounded-2xl bg-slate-900/60 backdrop-blur-md border border-slate-800/50 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
+
             <div className="flex flex-col items-center md:items-start space-y-2 order-2 md:order-1">
               <p className="text-xs text-slate-500 font-medium tracking-wide">
                 Ecosistema Digital SANTI &copy; 2026. Todos los derechos reservados.
@@ -133,37 +105,37 @@ export default function PublicFooter() {
                 <span className="bg-slate-800/40 text-slate-400 px-2.5 py-0.5 rounded-full border border-slate-800 text-[10px] font-semibold tracking-wide">
                   Distribuidor Autorizado
                 </span>
-                <span className="bg-purple-500/10 text-purple-400 px-2.5 py-0.5 rounded-full border border-purple-500/20 text-[10px] font-semibold tracking-wide">
+                <span className="bg-electric/10 text-electric px-2.5 py-0.5 rounded-full border border-electric/20 text-[10px] font-semibold tracking-wide">
                   Convenio SENATI
                 </span>
               </div>
             </div>
 
-            {/* BLOQUE CENTRAL ABSOLUTO: ISOTIPO AGIGANTADO Y CENTRALIZADO */}
-            <div className="flex flex-col items-center justify-center space-y-1 order-1 md:order-2 my-2 md:my-0">
-              <LogoSanti sizeClassName="w-16 h-16 md:w-20 md:h-20" />
-              <span className="text-[10px] font-bold font-mono tracking-widest text-slate-500 uppercase">
-                SANTI
-              </span>
+            <div className="flex flex-col items-center justify-center order-1 md:order-2 my-1 md:my-0 gap-1">
+              <LogoSanti sizeClassName="w-10 h-10" />
+              <p className="text-[9px] font-mono tracking-wide text-slate-500 text-center max-w-[220px] leading-tight">
+                SANTI — Sistema de Asistencia y Núcleo Técnico Integral
+              </p>
             </div>
 
-            {/* BLOQUE ALINEADO A LA DERECHA: HUBS SOCIALES Y ACCESO OPERATIVO */}
             <div className="flex flex-col items-center md:items-end space-y-3 order-3">
-              {/* Iconos Sociales con Tono Canónico y Efecto Hover Teal */}
               <div className="flex items-center space-x-4 text-slate-400">
                 <Link className="hover:text-teal transition-colors p-1" href="https://facebook.com" target="_blank" aria-label="Facebook"><FacebookIcon className="w-4 h-4"/></Link>
                 <Link className="hover:text-teal transition-colors p-1" href="https://tiktok.com" target="_blank" aria-label="TikTok"><TikTokIcon className="w-4 h-4"/></Link>
                 <Link className="hover:text-teal transition-colors p-1" href="https://instagram.com" target="_blank" aria-label="Instagram"><InstagramIcon className="w-4 h-4"/></Link>
                 <Link className="hover:text-teal transition-colors p-1" href="https://youtube.com" target="_blank" aria-label="YouTube"><YouTubeIcon className="w-4 h-4"/></Link>
               </div>
-              {/* Botón de Autenticación de Perfil Bajo Píldora */}
-              <Link className="border border-slate-800 bg-slate-900/30 hover:bg-slate-800/50 text-slate-300 hover:text-white px-5 py-2 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all duration-300" href="/admin/login">
+              <Link
+                className="border border-slate-800 bg-slate-900/30 hover:bg-slate-800/50 text-slate-300 hover:text-white px-5 py-2 rounded-xl text-xs font-semibold font-mono tracking-wide shadow-[0_0_20px_rgba(13,148,136,0.15)] hover:shadow-[0_0_24px_rgba(13,148,136,0.3)] active:scale-95 transition-all duration-300"
+                href="/admin/login"
+              >
                 Ingreso Personal
               </Link>
             </div>
 
           </div>
         </div>
+      </div>
     </footer>
   )
 }

@@ -248,12 +248,12 @@ async def test_adm02_parametro_inexistente_retorna_404(app_client):
 async def test_adm03_crea_vehiculo(app_client):
     """EP-ADM-03: ADMINISTRADOR crea vehículo → 201 con vehiculo_id."""
     r = await app_client.post("/v1/admin/vehiculos", json={
-        "universo": "mototaxi", "modelo": "Bajaj RE", "año": 2021,
+        "universo": "mototaxi_3r", "modelo": "Bajaj RE", "año": 2021,
     })
     assert r.status_code == 201
     data = r.json()["data"]
     assert "vehiculo_id" in data
-    assert data["universo"] == "mototaxi"
+    assert data["universo"] == "mototaxi_3r"
     assert data["modelo"] == "Bajaj RE"
 
 
@@ -276,7 +276,7 @@ async def test_adm03_mecanico_no_autorizado(app_client):
     r = await app_client.post(
         "/v1/admin/vehiculos",
         headers={"Authorization": f"Bearer {token}"},
-        json={"universo": "mototaxi", "modelo": "Test", "año": 2020},
+        json={"universo": "mototaxi_3r", "modelo": "Test", "año": 2020},
     )
     assert r.status_code == 403
 

@@ -23,6 +23,7 @@ from src.taller.domain.models.orden_trabajo import (
     NivelMecanico,
     NivelUrgencia,
     OrdenTrabajo,
+    OrdenTrabajoEvento,
     TramoAdicional,
     Vehiculo,
 )
@@ -32,6 +33,7 @@ from src.taller.infrastructure.repositories.models.taller_models import (
     HistorialIntervencionModel,
     ListaRepuestosOTModel,
     MecanicoModel,
+    OrdenTrabajoEventoModel,
     OrdenTrabajoModel,
     RendicionMecanicoModel,
     VehiculoModel,
@@ -72,6 +74,11 @@ class TallerRepositoryPG:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._vehiculo_to_domain(model) if model else None
+
+    async def listar_vehiculos_por_cliente(self, cliente_id: str) -> list[Vehiculo]:
+        stmt = select(VehiculoModel).where(VehiculoModel.cliente_id == cliente_id)
+        result = await self._session.execute(stmt)
+        return [self._vehiculo_to_domain(m) for m in result.scalars().all()]
 
     # ── Mecánicos ─────────────────────────────────────────────────────────────
 
@@ -125,6 +132,7 @@ class TallerRepositoryPG:
             cliente_aprobo_lista=ot.cliente_aprobo_lista,
             costo_mano_obra=ot.costo_mano_obra,
             monto_estimado=ot.monto_estimado,
+            aceptada_en=ot.aceptada_en,
         ))
         await self._session.flush()  # OT debe existir antes de lista_repuestos_ot (FK)
         for item in ot.lista_repuestos:
@@ -156,6 +164,7 @@ class TallerRepositoryPG:
         model.costo_mano_obra = ot.costo_mano_obra
         model.monto_estimado = ot.monto_estimado
         model.mecanico_junior_id = ot.mecanico_junior_id
+        model.aceptada_en = ot.aceptada_en
         model.updated_at = datetime.now(timezone.utc)
 
         existentes = {
@@ -246,6 +255,22 @@ class TallerRepositoryPG:
         await self._session.flush()
         return h
 
+    async def listar_historial(self) -> list[HistorialIntervencion]:
+        stmt = select(HistorialIntervencionModel)
+        result = await self._session.execute(stmt)
+        return [
+            HistorialIntervencion(
+                id=m.id,
+                vehiculo_id=m.vehiculo_id,
+                orden_trabajo_id=m.orden_trabajo_id,
+                mecanico_master_id=m.mecanico_master_id,
+                fecha_apertura=_dt(m.fecha_apertura),
+                fecha_cierre=_dt(m.fecha_cierre),
+                monto_final=Decimal(str(m.monto_final)),
+            )
+            for m in result.scalars().all()
+        ]
+
     # ── Historial de negocio (ADR-016) ──────────────────────────────────────────
 
     async def obtener_mecanico_id_por_usuario(self, usuario_id: str) -> Optional[str]:
@@ -323,6 +348,7 @@ class TallerRepositoryPG:
         ot.monto_estimado = (
             Decimal(str(model.monto_estimado)) if model.monto_estimado else Decimal("0")
         )
+        ot.aceptada_en = _dt(model.aceptada_en) if model.aceptada_en else None
         ot.created_at = _dt(model.created_at)
         ot.updated_at = _dt(model.updated_at)
         # _TRANSICIONES_VALIDAS es un field con default_factory
@@ -388,3 +414,37 @@ class TallerRepositoryPG:
             disponible=model.disponible,
             created_at=_dt(model.created_at),
         )
+
+    # ── Auditoría transversal (R29, FASE 2) ─────────────────────────────────────
+
+    async def registrar_evento_ot(self, evento: OrdenTrabajoEvento) -> OrdenTrabajoEvento:
+        self._session.add(OrdenTrabajoEventoModel(
+            id=evento.id,
+            ot_id=evento.ot_id,
+            evento=evento.evento,
+            estado_anterior=evento.estado_anterior,
+            estado_nuevo=evento.estado_nuevo,
+            actor_id=evento.actor_id,
+        ))
+        await self._session.flush()
+        return evento
+
+    async def listar_eventos_ot(self, ot_id: str) -> list[OrdenTrabajoEvento]:
+        stmt = (
+            select(OrdenTrabajoEventoModel)
+            .where(OrdenTrabajoEventoModel.ot_id == ot_id)
+            .order_by(OrdenTrabajoEventoModel.timestamp)
+        )
+        result = await self._session.execute(stmt)
+        return [
+            OrdenTrabajoEvento(
+                id=m.id,
+                ot_id=m.ot_id,
+                evento=m.evento,
+                estado_anterior=m.estado_anterior,
+                estado_nuevo=m.estado_nuevo,
+                actor_id=m.actor_id,
+                timestamp=_dt(m.timestamp),
+            )
+            for m in result.scalars().all()
+        ]

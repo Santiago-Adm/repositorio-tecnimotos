@@ -16,7 +16,12 @@ class UsuarioModel(Base):
     __tablename__ = "usuario"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)  # cifrado Fernet (03 §5.7)
+    # Cifrado Fernet real (03 §5.7) desde la verificación profunda 2026-07-05 —
+    # antes decía "cifrado Fernet" en el comentario pero se guardaba en texto
+    # plano (hallazgo real). Fernet no es determinístico, así que la búsqueda
+    # y la unicidad viven en email_hash (índice ciego HMAC-SHA256), no aquí.
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    email_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     rol: Mapped[str] = mapped_column(String(30), nullable=False)
     sub_rol: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -132,6 +137,10 @@ class SesionModel(Base):
     mfa_completado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     estado: Mapped[str] = mapped_column(String(10), nullable=False, default="ACTIVA")
     expira_en: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Pieza 6-bis: ventana de inactividad (minutos) que se vuelve a aplicar en
+    # cada rotar_refresh exitoso (sesión deslizante) — 15 para roles estándar,
+    # 180 (3h) para SUPERADMIN/ADMINISTRADOR, fijado en la creación de la sesión.
+    idle_window_minutos: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
@@ -140,4 +149,22 @@ class SesionModel(Base):
         Index("idx_sesion_usuario", "usuario_id"),
         Index("idx_sesion_jti", "jti"),
         Index("idx_sesion_expiracion", "expira_en"),
+    )
+
+
+class DispositivoConfiableModel(Base):
+    """Pieza 6-bis — dispositivo ya verificado por MFA una vez: en logins
+    posteriores desde el mismo dispositivo, se salta el paso de MFA (solo
+    contraseña). Aplica a los 11 roles; el token vive en localStorage del
+    navegador y se identifica aquí solo por su hash SHA-256."""
+    __tablename__ = "dispositivo_confiable"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    usuario_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    creado_en: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    ultimo_uso: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_dispositivo_confiable_usuario", "usuario_id"),
     )
