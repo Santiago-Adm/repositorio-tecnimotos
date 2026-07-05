@@ -55,7 +55,10 @@ y despliegue) antes de cada publicación a producción.
 
 ## Despliegue
 
-Alojado en [Railway](https://railway.app). URL de producción: _por publicar_.
+Backend en [Railway](https://railway.app) (API + PostgreSQL + Redis),
+frontend en [Vercel](https://vercel.com).
+
+URL de producción: **https://repositorio-tecnimotos.vercel.app**
 
 ## Documentación interna
 
