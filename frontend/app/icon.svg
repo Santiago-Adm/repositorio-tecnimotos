@@ -50,6 +50,14 @@
      inkscape:groupmode="layer"
      inkscape:label="Image"
      id="g1">
+    <rect
+       id="favicon-background"
+       x="-20"
+       y="-20"
+       width="2088"
+       height="2088"
+       rx="400"
+       fill="#0F172A" />
     <g
        id="g2"
        transform="matrix(1.9886141,0,0,3.1945342,-1053.1783,-1721.2201)">
