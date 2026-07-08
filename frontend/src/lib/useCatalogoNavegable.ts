@@ -34,6 +34,7 @@ export function useCatalogoNavegable({ universoInicial = 'mototaxi_3r', universo
   const [universo, setUniversoState] = useState<Universo>(universoFijo ?? universoInicial)
   const [modelo, setModelo] = useState('')
   const [categoria, setCategoria] = useState('')
+  const [busqueda, setBusqueda] = useState('')
   const [page, setPage] = useState(1)
 
   const [repuestos, setRepuestos] = useState<RepuestoListItem[] | null>(null)
@@ -57,7 +58,7 @@ export function useCatalogoNavegable({ universoInicial = 'mototaxi_3r', universo
 
   useEffect(() => {
     setPage(1)
-  }, [universo, modelo, categoria])
+  }, [universo, modelo, categoria, busqueda])
 
   async function cargar() {
     setLoading(true)
@@ -66,6 +67,7 @@ export function useCatalogoNavegable({ universoInicial = 'mototaxi_3r', universo
       const params = new URLSearchParams({ universo, page: String(page), limit: String(pageSize) })
       if (modelo) params.set('modelo', modelo)
       if (categoria) params.set('categoria', categoria)
+      if (busqueda) params.set('q', busqueda)
       const data = await apiClient.get<{ repuestos: RepuestoListItem[]; total: number; total_paginas: number }>(
         `/v1/repuestos?${params.toString()}`,
       )
@@ -83,10 +85,11 @@ export function useCatalogoNavegable({ universoInicial = 'mototaxi_3r', universo
   useEffect(() => {
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [universo, modelo, categoria, page])
+  }, [universo, modelo, categoria, busqueda, page])
 
   return {
     universo, setUniverso, modelo, setModelo, categoria, setCategoria,
+    busqueda, setBusqueda,
     page, setPage, repuestos, total, totalPaginas, loading, error,
     modelosDisponibles, recargar: cargar, universoBloqueado: !!universoFijo,
   }

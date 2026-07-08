@@ -1724,7 +1724,7 @@
           "catalogo"
         ],
         "summary": "EP-CAT-01: Buscar repuestos",
-        "description": "Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.\nIncluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).\ndestacado=true filtra la selección editorial manual usada en la landing pública.\ncompletar_aleatorio=true (junto con destacado=true y limit): si hay menos\ndestacados que `limit`, completa con repuestos reales aleatorios (nunca\nvacío mientras haya catálogo — PIEZA A, sesión 2026-07-03). Opt-in: solo\npara vistas de escaparate público, nunca para listados administrativos.",
+        "description": "Búsqueda por universo, modelo, año, categoría, destacado y texto libre (q). NUNCA\ndevuelve precio_venta. Incluye imagen_principal_url (primera imagen, orden=0) si existe —\nextensión aditiva.\npage/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad\ncon consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /\nsesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).\ndestacado=true filtra la selección editorial manual usada en la landing pública.\ncompletar_aleatorio=true (junto con destacado=true y limit): si hay menos\ndestacados que `limit`, completa con repuestos reales aleatorios (nunca\nvacío mientras haya catálogo — PIEZA A, sesión 2026-07-03). Opt-in: solo\npara vistas de escaparate público, nunca para listados administrativos.\nq: filtro avanzado por código o nombre (ILIKE substring, insensible a mayúsculas) —\nmatchea contra `nombre` OR `codigo`, pensado como filtro de apoyo real sobre las 16 195\npiezas del catálogo (PCT sesión responsive/filtros, ver .doc3/03-diseno-sistema.md §6.2).",
         "operationId": "buscar_repuestos_v1_repuestos_get",
         "parameters": [
           {
@@ -1807,6 +1807,22 @@
               "type": "boolean",
               "default": false,
               "title": "Completar Aleatorio"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {

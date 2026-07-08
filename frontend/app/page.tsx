@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import PublicNavbar from '@/src/components/layout/PublicNavbar'
 import PublicFooter from '@/src/components/ui/PublicFooter'
 import RepuestoCard from '@/src/components/RepuestoCard'
@@ -47,6 +48,15 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
 
   const [videoError, setVideoError] = useState(false)
+
+  // Estilo espacial (Sant, sesión responsive): profundidad con parallax de scroll +
+  // flotación sutil, todo vía Framer Motion/CSS — sin librería 3D ni tokens de color
+  // nuevos (10-diseno-uiux.md §3.1/§3.6). Alcance: solo esta landing raíz.
+  const heroRef = useRef<HTMLElement>(null)
+  const reduceMotion = useReducedMotion()
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
+  const parallaxFondo = useTransform(scrollYProgress, [0, 1], [0, 90])
+  const parallaxContenido = useTransform(scrollYProgress, [0, 1], [0, -50])
 
   // Búsqueda real por código exacto (GET /v1/repuestos/{codigo}) — antes el
   // input solo filtraba en memoria los 12 destacados ya cargados, así que
@@ -112,9 +122,13 @@ export default function Home() {
       <div className="min-h-screen font-body text-slate-800 bg-white">
         <PublicNavbar />
 
-        {/* B. BLOQUE HERO DE BIENVENIDA */}
-        <section className="relative w-full min-h-[85vh] flex flex-col items-center justify-center overflow-hidden bg-surface-dark pt-6 text-center">
-          <div className="absolute top-0 left-0 w-full h-full z-0 bg-surface-dark">
+        {/* B. BLOQUE HERO DE BIENVENIDA — estilo espacial: parallax de scroll entre
+            fondo y contenido (profundidad), flotación sutil en badge/buscador. */}
+        <section ref={heroRef} className="relative w-full min-h-[85vh] flex flex-col items-center justify-center overflow-hidden bg-surface-dark pt-6 text-center [perspective:1200px]">
+          <motion.div
+            className="absolute top-0 left-0 w-full h-full z-0 bg-surface-dark"
+            style={{ y: reduceMotion ? 0 : parallaxFondo }}
+          >
             {!videoError ? (
               <video
                 autoPlay
@@ -132,23 +146,39 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-br from-teal/20 to-electric/20" />
             )}
             <div className="absolute inset-0 bg-gradient-to-b from-surface-dark/80 via-transparent to-surface-dark/20" />
-          </div>
+          </motion.div>
 
-          <div className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center space-y-6 py-16 px-4 text-white">
-            <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal/20 text-teal border border-teal/30 select-none">
+          {/* Capas flotantes de profundidad — halos difusos con los tokens ya
+              existentes (teal/electric), sin assets ni colores nuevos. */}
+          <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-teal/20 blur-3xl z-0" aria-hidden="true" />
+          <div className="absolute -bottom-24 -right-16 w-80 h-80 rounded-full bg-electric/20 blur-3xl z-0" aria-hidden="true" />
+
+          <motion.div
+            className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center space-y-6 py-16 px-4 sm:px-6 text-white w-full"
+            style={{ y: reduceMotion ? 0 : parallaxContenido }}
+          >
+            <motion.span
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal/20 text-teal border border-teal/30 select-none shadow-lg shadow-teal/10"
+              animate={reduceMotion ? undefined : { y: [0, -6, 0] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
               🛡️ 15 años de confianza garantizada en taller
-            </span>
+            </motion.span>
 
-            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-3xl">
+            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-3xl">
               Encuentra el Repuesto <span className="bg-gradient-to-r from-teal to-electric bg-clip-text text-transparent">Exacto</span> para tu Moto
             </h1>
 
-            <p className="text-slate-200 text-base md:text-lg max-w-2xl font-medium leading-relaxed">
+            <p className="text-slate-200 text-sm sm:text-base md:text-lg max-w-2xl font-medium leading-relaxed">
               Consulta disponibilidad física instantánea, separa tus repuestos de forma remota y optimiza tus recorridos de compra en Ayacucho.
             </p>
 
-            <div className="relative w-full max-w-2xl bg-white rounded-full shadow-2xl px-6 py-4 flex items-center mt-4 group">
-              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-400">
+            <motion.div
+              className="relative w-full max-w-2xl bg-white rounded-full shadow-2xl shadow-teal/10 px-4 sm:px-6 py-3 sm:py-4 flex items-center mt-4 group"
+              animate={reduceMotion ? undefined : { y: [0, -5, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+            >
+              <div className="absolute inset-y-0 left-0 pl-4 sm:pl-5 flex items-center pointer-events-none text-slate-400">
                 <svg className="w-5 h-5 group-focus-within:text-teal transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -157,26 +187,26 @@ export default function Home() {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Busca repuestos por nombre o código de fábrica..."
-                className="w-full font-body text-sm sm:text-base bg-transparent pl-7 pr-6 py-1 text-slate-800 focus:outline-none placeholder-slate-400"
+                placeholder="Busca por nombre o código..."
+                className="w-full min-w-0 font-body text-sm sm:text-base bg-transparent pl-6 sm:pl-7 pr-4 sm:pr-6 py-1 text-slate-800 focus:outline-none placeholder-slate-400"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-slate-400 hover:text-slate-600 text-xs font-semibold whitespace-nowrap"
+                  className="shrink-0 text-slate-400 hover:text-slate-600 text-xs font-semibold whitespace-nowrap"
                 >
                   Limpiar
                 </button>
               )}
-            </div>
+            </motion.div>
 
-            <div className="flex items-center justify-center gap-3 mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-2 px-2">
               <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider">
                 Universo:
               </span>
               <button
                 onClick={() => setUniverso('mototaxi_3r')}
-                className={`rounded-full px-5 py-2 text-xs font-bold transition-all duration-200 ${
+                className={`rounded-full px-4 py-1.5 sm:px-5 sm:py-2 text-xs font-bold transition-all duration-200 ${
                   universo === 'mototaxi_3r'
                     ? 'bg-electric text-white shadow-md shadow-electric/30'
                     : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
@@ -186,7 +216,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setUniverso('mototaxi_4r')}
-                className={`rounded-full px-5 py-2 text-xs font-bold transition-all duration-200 ${
+                className={`rounded-full px-4 py-1.5 sm:px-5 sm:py-2 text-xs font-bold transition-all duration-200 ${
                   universo === 'mototaxi_4r'
                     ? 'bg-electric text-white shadow-md shadow-electric/30'
                     : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
@@ -196,7 +226,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setUniverso('motolineal')}
-                className={`rounded-full px-5 py-2 text-xs font-bold transition-all duration-200 ${
+                className={`rounded-full px-4 py-1.5 sm:px-5 sm:py-2 text-xs font-bold transition-all duration-200 ${
                   universo === 'motolineal'
                     ? 'bg-electric text-white shadow-md shadow-electric/30'
                     : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
@@ -205,7 +235,7 @@ export default function Home() {
                 Motolineal
               </button>
             </div>
-          </div>
+          </motion.div>
 
           <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0] z-30">
             <svg
@@ -271,20 +301,24 @@ export default function Home() {
                 <p className="text-xs text-slate-400">Intenta buscar por otro término o limpia los filtros.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 [perspective:1000px]">
                 {filteredRepuestos.map(r => (
-                  <RepuestoCard
+                  <div
                     key={r.codigo}
-                    variant="grid"
-                    surface="dark"
-                    repuestoId={r.id}
-                    codigo={r.codigo}
-                    nombre={r.nombre}
-                    modelo={r.modelo}
-                    universo={r.universo}
-                    disponible={r.activo}
-                    imagenUrl={r.imagen_principal_url}
-                  />
+                    className="transition-transform duration-300 ease-out hover:-translate-y-1.5 hover:scale-[1.015] hover:shadow-2xl hover:shadow-teal/10 rounded-2xl"
+                  >
+                    <RepuestoCard
+                      variant="grid"
+                      surface="dark"
+                      repuestoId={r.id}
+                      codigo={r.codigo}
+                      nombre={r.nombre}
+                      modelo={r.modelo}
+                      universo={r.universo}
+                      disponible={r.activo}
+                      imagenUrl={r.imagen_principal_url}
+                    />
+                  </div>
                 ))}
               </div>
             )}

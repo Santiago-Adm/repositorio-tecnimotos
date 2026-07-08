@@ -147,6 +147,40 @@ class TestBuscarRepuestos:
         )
         assert result.total == 0
 
+    @pytest.mark.asyncio
+    async def test_busca_por_q_matchea_nombre_case_insensitive(self, repo, repuesto_mototaxi, repuesto_tecnico_especializado):
+        await repo.guardar(repuesto_mototaxi)
+        await repo.guardar(repuesto_tecnico_especializado)
+
+        uc = BuscarRepuestosUseCase(repo)
+        result = await uc.execute(
+            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI_3R, q="filtro DE aceite")
+        )
+        assert result.total == 1
+        assert result.repuestos[0].codigo == "REP-001"
+
+    @pytest.mark.asyncio
+    async def test_busca_por_q_matchea_codigo_parcial(self, repo, repuesto_mototaxi, repuesto_tecnico_especializado):
+        await repo.guardar(repuesto_mototaxi)
+        await repo.guardar(repuesto_tecnico_especializado)
+
+        uc = BuscarRepuestosUseCase(repo)
+        result = await uc.execute(
+            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI_3R, q="060")
+        )
+        assert result.total == 1
+        assert result.repuestos[0].codigo == "REP-060"
+
+    @pytest.mark.asyncio
+    async def test_busca_por_q_sin_coincidencias_retorna_vacio(self, repo, repuesto_mototaxi):
+        await repo.guardar(repuesto_mototaxi)
+
+        uc = BuscarRepuestosUseCase(repo)
+        result = await uc.execute(
+            BuscarRepuestosQuery(universo=UniversoRepuesto.MOTOTAXI_3R, q="no existe esto")
+        )
+        assert result.total == 0
+
 
 class TestObtenerPorCodigo:
     @pytest.mark.asyncio

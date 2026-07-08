@@ -44,6 +44,7 @@ class InMemoryRepuestoRepository:
         destacado: Optional[bool] = None,
         random_order: bool = False,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
     ) -> list[Repuesto]:
         results = []
         for r in self._store.values():
@@ -56,6 +57,8 @@ class InMemoryRepuestoRepository:
             if año and r.año != año:
                 continue
             if destacado is not None and r.destacado != destacado:
+                continue
+            if q and q.lower() not in r.nombre.lower() and q.lower() not in r.codigo.lower():
                 continue
             results.append(r)
         if random_order:

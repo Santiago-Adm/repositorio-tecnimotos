@@ -30,7 +30,7 @@ function Ripple({ x, y }: { x: number; y: number }) {
       initial={{ opacity: 0.5, scale: 0 }}
       animate={{ opacity: 0, scale: 4 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="absolute w-8 h-8 rounded-full bg-white pointer-events-none"
+      className="absolute w-8 h-8 rounded-full bg-teal/30 pointer-events-none"
       style={{ left: x - 16, top: y - 16 }}
     />
   )
@@ -75,12 +75,22 @@ export default function PublicNavbar() {
 
   const esVariantMinima = pathname === '/login' || pathname.endsWith('/registro')
 
+  // Navbar flotante (Sant: "que se sienta más flotante, ahora está más estático"):
+  // al inicio de la página va a bordes completos; al bajar (compacto) se despega
+  // en una tarjeta redondeada con margen y sombra propia — deja de ser una barra
+  // pegada al viewport y pasa a sentirse suspendida sobre el contenido.
+  // Color (corrección Sant, ronda 2): bg-teal/80 con backdrop-saturate-150 se
+  // veía demasiado saturado y el isotipo (paleta clara #a4cfda, ver logo-santi.svg)
+  // se perdía contra el teal brillante. Ahora predomina Cobalt Dark (mismo token
+  // que el resto del sistema) con un degradado de teal como "toque" sutil en la
+  // esquina opuesta al logo — logo siempre sobre la zona más oscura. Sin
+  // backdrop-saturate (amplificaba el brillo) y sin hex nuevo (10 §3.1/§3.6).
   return (
     <header
-      className={`sticky top-0 z-50 w-full bg-surface-dark/90 backdrop-blur-xl backdrop-saturate-150 flex items-center justify-between transition-[padding,box-shadow] duration-300 ${
+      className={`sticky z-50 flex items-center justify-between bg-gradient-to-br from-surface-dark via-surface-dark to-teal/30 backdrop-blur-xl transition-all duration-300 ${
         compacto
-          ? 'px-4 lg:px-8 py-2 border-b border-teal/20 shadow-[0_8px_30px_-12px_rgba(13,148,136,0.25)]'
-          : 'px-4 lg:px-8 py-3 border-b border-slate-800/60 shadow-none'
+          ? 'top-3 mx-3 sm:mx-6 px-4 lg:px-8 py-2 rounded-2xl border border-teal/20 shadow-[0_20px_50px_-15px_rgba(13,148,136,0.35)]'
+          : 'top-0 mx-0 px-4 lg:px-8 py-3 rounded-none border-b border-teal/15 shadow-none'
       }`}
     >
       {/* Barra de progreso de scroll */}
@@ -105,7 +115,9 @@ export default function PublicNavbar() {
           )}
         </motion.div>
 
-        <span className="text-2xl lg:text-3xl font-extrabold tracking-tight font-display bg-gradient-to-r from-[#0D9488] to-[#8B5CF6] bg-clip-text text-transparent group-hover:opacity-90 transition-opacity">
+        {/* Gradiente blanco→electric (antes teal→electric): sobre el navbar teal
+            nuevo, el extremo teal del degradado se perdía contra el propio fondo. */}
+        <span className="text-2xl lg:text-3xl font-extrabold tracking-tight font-display bg-gradient-to-r from-white to-[#8B5CF6] bg-clip-text text-transparent group-hover:opacity-90 transition-opacity">
           SANTI
         </span>
       </Link>
@@ -118,12 +130,13 @@ export default function PublicNavbar() {
               key={link.href}
               href={link.href}
               className={`relative px-4 py-2 rounded-full font-semibold text-sm transition-colors duration-200 group/link ${
-                activo ? 'text-teal' : 'text-slate-300 hover:text-teal'
+                activo ? 'text-white' : 'text-white/70 hover:text-white'
               }`}
             >
               {link.label}
+              {/* Indicador en electric, no teal — teal se pierde sobre el fondo teal del navbar */}
               <span
-                className={`absolute left-1/2 -translate-x-1/2 bottom-0.5 h-[2px] bg-teal rounded-full transition-transform duration-300 ease-out ${
+                className={`absolute left-1/2 -translate-x-1/2 bottom-0.5 h-[2px] bg-electric rounded-full transition-transform duration-300 ease-out ${
                   activo ? 'w-2/3 scale-x-100' : 'w-2/3 scale-x-0 group-hover/link:scale-x-100'
                 }`}
                 aria-hidden="true"
@@ -143,10 +156,12 @@ export default function PublicNavbar() {
             <Link href="/login" className="text-slate-300 hover:text-white text-sm font-semibold font-body transition-colors">
               Iniciar Sesión
             </Link>
+            {/* Botón invertido (blanco sobre teal) — bg-teal sólido se perdía
+                contra el navbar teal nuevo; blanco da el contraste máximo. */}
             <Link
               href={registroHref(pathname)}
               onClick={lanzarRipple}
-              className="relative overflow-hidden bg-teal hover:bg-teal/90 text-white font-semibold font-body text-sm px-5 py-2 rounded-full shadow-sm active:scale-95 transition-all"
+              className="relative overflow-hidden bg-white hover:bg-slate-50 text-teal font-semibold font-body text-sm px-5 py-2 rounded-full shadow-sm active:scale-95 transition-all"
             >
               Registrarse
               {ripples.map(r => <Ripple key={r.id} x={r.x} y={r.y} />)}

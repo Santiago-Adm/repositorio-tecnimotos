@@ -88,6 +88,19 @@ class TestRepuestoRepositoryPG:
         assert rep1.codigo in codigos
         assert rep2.codigo in codigos
 
+    async def test_buscar_por_q_matchea_nombre_o_codigo(self, repo, pg_session):
+        rep = _make_repuesto()
+        await repo.guardar(rep)
+
+        por_nombre = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI_3R, q=rep.nombre[:8])
+        assert rep.codigo in [r.codigo for r in por_nombre]
+
+        por_codigo = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI_3R, q=rep.codigo[-6:].lower())
+        assert rep.codigo in [r.codigo for r in por_codigo]
+
+        sin_match = await repo.buscar(universo=UniversoRepuesto.MOTOTAXI_3R, q="zzz-no-existe-zzz")
+        assert rep.codigo not in [r.codigo for r in sin_match]
+
     async def test_repuesto_inactivo_no_en_busqueda(self, repo, pg_session):
         rep = _make_repuesto()
         await repo.guardar(rep)

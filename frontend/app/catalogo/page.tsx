@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import PublicNavbar from '@/src/components/layout/PublicNavbar'
 import PublicFooter from '@/src/components/ui/PublicFooter'
+import ModeloDropdown from '@/src/components/ui/ModeloDropdown'
 import RepuestoCard from '@/src/components/RepuestoCard'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
@@ -91,6 +92,16 @@ function CatalogoContent() {
     return () => clearTimeout(t)
   }, [modeloInput])
 
+  // Debounce de la caja de búsqueda del hero (código o nombre → EP-CAT-01 `q`, server-side
+  // real sobre las 16 195 piezas). Antes `busqueda` solo alimentaba la búsqueda exacta por
+  // código (EP-CAT-02); un término que no parecía código quedaba sin efecto (bug real
+  // encontrado al conectar el filtro avanzado de código/nombre para todos los roles).
+  const [q, setQ] = useState(busqueda.trim())
+  useEffect(() => {
+    const t = setTimeout(() => setQ(busqueda.trim()), 400)
+    return () => clearTimeout(t)
+  }, [busqueda])
+
   // Sincronizar filtros a la URL
   useEffect(() => {
     const params = new URLSearchParams()
@@ -111,6 +122,7 @@ function CatalogoContent() {
       })
       if (modelo) params.set('modelo', modelo)
       if (categoria) params.set('categoria', categoria)
+      if (q) params.set('q', q)
       const data = await apiClient.get<{ repuestos: Repuesto[]; total: number; total_paginas: number }>(
         `/v1/repuestos?${params.toString()}`
       )
@@ -125,11 +137,11 @@ function CatalogoContent() {
   useEffect(() => {
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [universo, modelo, categoria, page])
+  }, [universo, modelo, categoria, q, page])
 
   useEffect(() => {
     setPage(1)
-  }, [universo, modelo, categoria])
+  }, [universo, modelo, categoria, q])
 
   // Búsqueda por código directa (EP-CAT-02) — única forma de búsqueda por texto:
   // EP-CAT-01 no tiene parámetro de texto libre, así que el catálogo pagina
@@ -189,13 +201,15 @@ function CatalogoContent() {
             {total} repuestos físicos en Ayacucho
           </p>
 
-          {/* Caja de Búsqueda Integrada — código exacto (ej. 39050302) */}
+          {/* Caja de Búsqueda Integrada — código exacto (ej. 39050302) muestra la
+              ficha ampliada (EP-CAT-02); cualquier otro texto busca por código o
+              nombre en todo el catálogo (EP-CAT-01 `q`, server-side real). */}
           <div className="mt-8 w-full max-w-md relative">
             <input
               type="text"
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
-              placeholder="Busca por código exacto (ej. 39050302)..."
+              placeholder="Busca por código o nombre (ej. filtro de aceite)..."
               className="w-full px-5 py-3 rounded-full bg-slate-900/90 border border-slate-800/80 font-mono text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal/70 focus:border-transparent transition-all shadow-lg"
             />
           </div>
@@ -224,22 +238,16 @@ function CatalogoContent() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap justify-center">
-          {/* Filtro 2: modelo — autocomplete real (107 valores confirmados, FASE 0.3),
-              poblado desde GET /v1/repuestos/modelos, no texto libre disperso. */}
-          <div className="flex items-center space-x-2 text-xs text-slate-400 bg-[#0b0f19]/50 px-3 py-1.5 rounded-lg border border-slate-800/70 backdrop-blur-md">
-            <span className="font-semibold uppercase tracking-wider text-[10px]">Modelo:</span>
-            <input
-              type="text"
-              list="modelos-catalogo"
-              value={modeloInput}
-              onChange={e => setModeloInput(e.target.value)}
-              placeholder="Ej. Pulsar 200 NS"
-              className="bg-transparent border-none text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-0 font-medium text-xs w-44"
-            />
-            <datalist id="modelos-catalogo">
-              {modelosDisponibles.map(m => <option key={m} value={m} />)}
-            </datalist>
-          </div>
+          {/* Filtro 2: modelo — dropdown con botón de despliegue manual (107 valores
+              confirmados, FASE 0.3), poblado desde GET /v1/repuestos/modelos. Antes era
+              <input list>+<datalist> nativo, sin affordance visible en móvil (Sant). */}
+          <ModeloDropdown
+            value={modeloInput}
+            onChange={setModeloInput}
+            opciones={modelosDisponibles}
+            surface="dark"
+            placeholder="Todos los modelos"
+          />
 
           {/* Filtro 3: año — deshabilitado hasta que Elena cargue datos reales
               (16 195/16 195 repuestos con año NULL hoy, confirmado FASE 0.3). */}

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.catalogo.domain.models.repuesto import (
@@ -55,6 +55,7 @@ class RepuestoRepositoryPG:
         destacado: Optional[bool] = None,
         random_order: bool = False,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
     ) -> list[Repuesto]:
         conditions = [
             RepuestoModel.universo == universo.value,
@@ -68,6 +69,10 @@ class RepuestoRepositoryPG:
             conditions.append(RepuestoModel.año == año)
         if destacado is not None:
             conditions.append(RepuestoModel.destacado == destacado)
+        if q:
+            conditions.append(
+                or_(RepuestoModel.nombre.ilike(f"%{q}%"), RepuestoModel.codigo.ilike(f"%{q}%"))
+            )
 
         stmt = select(RepuestoModel).where(and_(*conditions))
         if random_order:

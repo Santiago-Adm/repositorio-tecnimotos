@@ -6,6 +6,7 @@ import RepuestoCard from '@/src/components/RepuestoCard'
 import LoadingIndicator from '@/src/components/LoadingIndicator'
 import ErrorDisplay from '@/src/components/ErrorDisplay'
 import EmptyState from '@/src/components/EmptyState'
+import ModeloDropdown from '@/src/components/ui/ModeloDropdown'
 import { RepuestoListItem } from '@/src/lib/types'
 import { useCatalogoNavegable, UNIVERSOS_VALIDOS, UNIVERSO_LABEL, Universo } from '@/src/lib/useCatalogoNavegable'
 
@@ -81,6 +82,7 @@ export default function CatalogoNavegable({
   const isDark = surface === 'dark'
   const {
     universo, setUniverso, modelo, setModelo, categoria, setCategoria,
+    busqueda, setBusqueda,
     page, setPage, repuestos, total, totalPaginas, loading, error,
     modelosDisponibles, recargar, universoBloqueado,
   } = useCatalogoNavegable({ universoFijo, universoInicial, pageSize })
@@ -92,6 +94,18 @@ export default function CatalogoNavegable({
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modeloInput])
+
+  // Filtro avanzado por código o nombre (EP-CAT-01 `q`) — mismo componente para
+  // todos los roles que usan CatalogoNavegable (Administrador, Vendedor, Mecánico
+  // Máster, Distrito, Conductor, Rural): "un solo componente, nunca duplicado por
+  // rol" (R17, ver comentario de módulo más abajo). Búsqueda real server-side
+  // sobre las 16 195 piezas, no solo la página cargada en memoria.
+  const [busquedaInput, setBusquedaInput] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setBusqueda(busquedaInput.trim()), 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busquedaInput])
 
   function verCatalogoCompleto() {
     setFiltroVehiculoActivo(false)
@@ -204,23 +218,27 @@ export default function CatalogoNavegable({
         )}
 
         <div className="flex items-center gap-3 flex-wrap">
+          <ModeloDropdown
+            value={modeloInput}
+            onChange={setModeloInput}
+            opciones={modelosDisponibles}
+            surface={surface}
+            placeholder="Todos los modelos"
+          />
+
           <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
             isDark ? 'text-slate-400 bg-slate-800/70 border-slate-700' : 'text-slate-500 bg-slate-100 border-slate-200'
           }`}>
-            <span className="font-semibold uppercase tracking-wider text-[10px]">Modelo:</span>
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Código/Nombre:</span>
             <input
               type="text"
-              list="modelos-catalogo-navegable"
-              value={modeloInput}
-              onChange={e => setModeloInput(e.target.value)}
-              placeholder="Ej. Pulsar 200 NS"
+              value={busquedaInput}
+              onChange={e => setBusquedaInput(e.target.value)}
+              placeholder="Ej. filtro de aceite"
               className={`bg-transparent border-none focus:outline-none focus:ring-0 font-medium text-xs w-40 ${
                 isDark ? 'text-slate-200 placeholder-slate-600' : 'text-slate-700 placeholder-slate-400'
               }`}
             />
-            <datalist id="modelos-catalogo-navegable">
-              {modelosDisponibles.map(m => <option key={m} value={m} />)}
-            </datalist>
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto min-w-0 max-w-full py-1">

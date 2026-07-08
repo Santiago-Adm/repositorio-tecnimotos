@@ -26,6 +26,7 @@ class RepuestoRepository(Protocol):
         destacado: Optional[bool] = None,
         random_order: bool = False,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
     ) -> list[Repuesto]: ...
 
     async def listar_modelos_distintos(self, universo: UniversoRepuesto) -> list[str]: ...

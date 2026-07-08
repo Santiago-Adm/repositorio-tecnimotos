@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* NO poner overflow-x:hidden en html/body: aunque en teoría son el scroller
+ * raíz, varios navegadores móviles (WebKit/Safari confirmado, algunos Chrome
+ * también) rompen `position: sticky` en CUALQUIER descendiente si html o body
+ * tienen overflow-x distinto de visible — mismo bug que ya se había evitado
+ * en un div interno, reapareció un nivel más arriba (Sant, captura real:
+ * navbar dejó de seguir el scroll tras mover la regla a html/body). La
+ * protección real contra overflow horizontal ya está resuelta en el origen:
+ * viewport meta (`app/layout.tsx`) + flex-wrap en filas que podían desbordar
+ * + overflow-hidden LOCAL en cada sección con capas decorativas (hero de
+ * `page.tsx`), nunca a nivel global. */
+
 :root {
   --color-teal: #0D9488;
   --color-electric: #8B5CF6;

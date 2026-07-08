@@ -95,6 +95,42 @@ async def test_ep_cat_01_separacion_universos_rnn05(client_with_data):
 
 
 @pytest.mark.asyncio
+async def test_ep_cat_01_filtro_q_matchea_nombre(client_with_data):
+    """EP-CAT-01: q filtra por nombre, substring case-insensitive."""
+    response = await client_with_data.get(
+        "/v1/repuestos", params={"universo": "mototaxi_3r", "q": "ACEITE"}
+    )
+    assert response.status_code == 200
+    repuestos = response.json()["data"]["repuestos"]
+    assert len(repuestos) == 1
+    assert repuestos[0]["codigo"] == "REP-001"
+
+
+@pytest.mark.asyncio
+async def test_ep_cat_01_filtro_q_matchea_codigo_parcial(client_with_data):
+    """EP-CAT-01: q también filtra por código, no solo nombre."""
+    response = await client_with_data.get(
+        "/v1/repuestos", params={"universo": "mototaxi_3r", "q": "rep-00"}
+    )
+    assert response.status_code == 200
+    repuestos = response.json()["data"]["repuestos"]
+    assert len(repuestos) == 1
+    assert repuestos[0]["codigo"] == "REP-001"
+
+
+@pytest.mark.asyncio
+async def test_ep_cat_01_filtro_q_sin_coincidencias(client_with_data):
+    """EP-CAT-01: q sin coincidencias retorna lista vacía, no error."""
+    response = await client_with_data.get(
+        "/v1/repuestos", params={"universo": "mototaxi_3r", "q": "esto-no-existe"}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 0
+    assert data["repuestos"] == []
+
+
+@pytest.mark.asyncio
 async def test_ep_cat_02_obtiene_por_codigo(client_with_data):
     """EP-CAT-02: obtiene repuesto por código."""
     response = await client_with_data.get("/v1/repuestos/REP-001")

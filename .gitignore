@@ -42,6 +42,7 @@ dist/
 .dco3/
 VERIFICACION_MANUAL.md
 levantar-sistema.md
+dependency-check-report
 
 dependency-check-report/
 semgrep-report.json

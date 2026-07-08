@@ -245,11 +245,13 @@ async def buscar_repuestos(
     categoria: Optional[str] = None,
     destacado: Optional[bool] = None,
     completar_aleatorio: bool = False,
+    q: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: Optional[int] = Query(None, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Búsqueda por universo, modelo, año, categoría y destacado. NUNCA devuelve precio_venta.
-    Incluye imagen_principal_url (primera imagen, orden=0) si existe — extensión aditiva.
+    """Búsqueda por universo, modelo, año, categoría, destacado y texto libre (q). NUNCA
+    devuelve precio_venta. Incluye imagen_principal_url (primera imagen, orden=0) si existe —
+    extensión aditiva.
     page/limit son opcionales — sin limit, devuelve el resultado completo (compatibilidad
     con consumidores existentes que no paginan). Con limit, pagina server-side (ADR-012 /
     sesión orquestación — EP-CAT-01 no paginaba, ver .doc3/05-trazabilidad-ligera.md).
@@ -257,13 +259,16 @@ async def buscar_repuestos(
     completar_aleatorio=true (junto con destacado=true y limit): si hay menos
     destacados que `limit`, completa con repuestos reales aleatorios (nunca
     vacío mientras haya catálogo — PIEZA A, sesión 2026-07-03). Opt-in: solo
-    para vistas de escaparate público, nunca para listados administrativos."""
+    para vistas de escaparate público, nunca para listados administrativos.
+    q: filtro avanzado por código o nombre (ILIKE substring, insensible a mayúsculas) —
+    matchea contra `nombre` OR `codigo`, pensado como filtro de apoyo real sobre las 16 195
+    piezas del catálogo (PCT sesión responsive/filtros, ver .doc3/03-diseno-sistema.md §6.2)."""
     repo = _get_repo(request)
     imagen_repo = _get_imagen_repo(request)
     use_case = BuscarRepuestosUseCase(repo)
     listar_uc = ListarImagenesUseCase(imagen_repo)
     result = await use_case.execute(
-        BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año, destacado=destacado)
+        BuscarRepuestosQuery(universo=universo, modelo=modelo, año=año, destacado=destacado, q=q)
     )
     repuestos_filtrados = result.repuestos
 
